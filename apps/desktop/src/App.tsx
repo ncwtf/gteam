@@ -11,6 +11,7 @@ import SettingsView from './components/SettingsView';
 import FloatingWindow from './components/FloatingWindow';
 import AddTeamModal from './components/AddTeamModal';
 import UpdateBanner from './components/UpdateBanner';
+import { startGitProgressSync } from './lib/gitMonitor';
 
 type View = 'projects' | 'documents' | 'requirements' | 'issues' | 'settings';
 
@@ -37,6 +38,19 @@ function App() {
       loadTeamData();
     }
   }, [activeConnectionId]);
+
+  useEffect(() => {
+    let stop: (() => void) | undefined;
+    let cancelled = false;
+    startGitProgressSync(() => useStore.getState().connections).then((unlisten) => {
+      if (cancelled) unlisten();
+      else stop = unlisten;
+    });
+    return () => {
+      cancelled = true;
+      stop?.();
+    };
+  }, []);
 
   const loadTeamData = async () => {
     if (!activeConnection) return;
