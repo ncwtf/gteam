@@ -216,7 +216,7 @@ function AddTeamModal({ onClose }: AddTeamModalProps) {
             </p>
             <div className="form-group">
               <label>团队服务器 URL</label>
-              <input type="text" value={serverUrl} onChange={(e) => setServerUrl(e.target.value)} placeholder="http://your.server:3000" required />
+              <input type="text" value={serverUrl} onChange={(e) => setServerUrl(e.target.value)} placeholder="https://team.example.com 或 http://host:3000" required />
             </div>
             <div className="form-group">
               <label>团队名称</label>
@@ -246,7 +246,7 @@ function AddTeamModal({ onClose }: AddTeamModalProps) {
                 type="text"
                 value={serverUrl}
                 onChange={(e) => setServerUrl(e.target.value)}
-                placeholder="http://your.server:3000"
+                placeholder="https://team.example.com 或 http://host:3000"
                 required
               />
             </div>
