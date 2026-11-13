@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { WSEventType } from '@gteam/shared';
-import { useStore } from './store';
 import Login from './components/Login';
 import TeamSidebar from './components/TeamSidebar';
 import Sidebar from './components/Sidebar';
@@ -14,8 +13,10 @@ import AddTeamModal from './components/AddTeamModal';
 import UpdateBanner from './components/UpdateBanner';
 import ErrorBanner from './components/ErrorBanner';
 import { reloadProjects } from './lib/teamData';
-import { isTauri, restoreToken } from './lib/session';
+import { restoreConnection } from './lib/session';
 import { useGitProgressSync } from './lib/gitSync';
+import { legacyTokenSnapshot, useStore } from './store';
+import ReconnectPrompt from './components/ReconnectPrompt';
 
 type View = 'projects' | 'documents' | 'requirements' | 'issues' | 'settings';
 
@@ -29,10 +30,12 @@ function App() {
     setSessionNotice,
     getActiveConnection,
     connectWebSocket,
-    disconnectAllWebSockets
+    disconnectAllWebSockets,
+    tokenRestore
   } = useStore();
   const [currentView, setCurrentView] = useState<View>('projects');
   const [showAddTeam, setShowAddTeam] = useState(false);
+  const [hydrated, setHydrated] = useState(() => useStore.persist.hasHydrated());
 
   const activeConnection = getActiveConnection();
   const connectionKey = connections.map((connection) => `${connection.id}:${connection.token ? '1' : '0'}`).join('|');
@@ -56,36 +59,56 @@ function App() {
   }, [connectionKey]);
 
   useEffect(() => {
-    const pending = useStore.getState().connections.filter((connection) => !connection.token);
+    if (useStore.persist.hasHydrated()) setHydrated(true);
+    return useStore.persist.onFinishHydration(() => setHydrated(true));
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    let cancelled = false;
+    const pending = useStore.getState().connections.filter((connection) => (
+      useStore.getState().tokenRestore[connection.id] !== 'ready'
+    ));
     pending.forEach((connection) => {
       useStore.getState().ensureTeamData(connection.id);
-      if (!isTauri()) {
-        useStore.getState().setProjectsError(connection.id, '登录状态已失效，请重新连接团队');
-        return;
-      }
-      restoreToken(connection.serverUrl)
-        .then((token) => {
+      restoreConnection(connection, legacyTokenSnapshot)
+        .then((restored) => {
+          if (cancelled) return;
           const current = useStore.getState().connections.find((item) => item.id === connection.id);
-          if (!current || current.token) return;
-          if (token) {
-            useStore.getState().updateConnection(connection.id, { token });
+          if (!current) return;
+          if (restored.notice) useStore.getState().setSessionNotice(restored.notice);
+          if (restored.status === 'ready') {
+            useStore.getState().updateConnection(connection.id, {
+              token: restored.token,
+              ...(restored.email ? { email: restored.email } : {})
+            });
+            useStore.getState().setTokenRestore(connection.id, 'ready');
             return;
           }
-          useStore.getState().setProjectsError(connection.id, '登录状态已失效，请重新连接团队');
+          if (!current.token) useStore.getState().setTokenRestore(connection.id, 'missing');
         })
         .catch(() => {
+          if (cancelled) return;
           const current = useStore.getState().connections.find((item) => item.id === connection.id);
           if (current && !current.token) {
-            useStore.getState().setProjectsError(connection.id, '登录状态已失效，请重新连接团队');
+            useStore.getState().setSessionNotice('无法读取系统密钥链，请重新登录');
+            useStore.getState().setTokenRestore(connection.id, 'missing');
           }
         });
     });
-  }, [connectionKey]);
+    return () => {
+      cancelled = true;
+    };
+  }, [connectionKey, hydrated]);
 
   useEffect(() => {
     if (!activeConnection?.token) return;
     reloadProjects(activeConnection);
   }, [activeConnection?.id, activeConnection?.token, projectEvent?.type, projectEvent?.timestamp]);
+
+  if (!hydrated) {
+    return <div className="loading">正在恢复登录状态...</div>;
+  }
 
   // 如果没有任何团队连接，显示添加团队界面
   if (connections.length === 0) {
@@ -112,11 +135,17 @@ function App() {
       <main className="main-content">
         <ErrorBanner message={sessionNotice} onRetry={() => setSessionNotice(null)} retryLabel="知道了" />
         <ErrorBanner message={activeConnectionId ? teamData[activeConnectionId]?.realtimeError : null} />
-        {currentView === 'projects' && <ProjectsView />}
-        {currentView === 'documents' && <DocumentsView />}
-        {currentView === 'requirements' && <RequirementsView />}
-        {currentView === 'issues' && <IssuesView />}
-        {currentView === 'settings' && <SettingsView />}
+        {activeConnection && !activeConnection.token && tokenRestore[activeConnection.id] !== 'missing' && (
+          <div className="loading">正在恢复登录状态...</div>
+        )}
+        {activeConnection && !activeConnection.token && tokenRestore[activeConnection.id] === 'missing' && (
+          <ReconnectPrompt connection={activeConnection} />
+        )}
+        {activeConnection?.token && currentView === 'projects' && <ProjectsView />}
+        {activeConnection?.token && currentView === 'documents' && <DocumentsView />}
+        {activeConnection?.token && currentView === 'requirements' && <RequirementsView />}
+        {activeConnection?.token && currentView === 'issues' && <IssuesView />}
+        {activeConnection?.token && currentView === 'settings' && <SettingsView />}
       </main>
       <FloatingWindow />
       {showAddTeam && <AddTeamModal onClose={() => setShowAddTeam(false)} />}

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useStore } from '../store';
+import { deletionFailure } from '../lib/keychainErrors';
 import { forgetToken } from '../lib/session';
-import ErrorBanner from './ErrorBanner';
 
 interface SidebarProps {
   currentView: string;
@@ -9,19 +9,25 @@ interface SidebarProps {
 }
 
 function Sidebar({ currentView, onViewChange }: SidebarProps) {
-  const { getActiveConnection, removeConnection } = useStore();
+  const { getActiveConnection, removeConnection, setSessionNotice } = useStore();
   const activeConnection = getActiveConnection();
-  const [disconnectError, setDisconnectError] = useState('');
+  const [disconnecting, setDisconnecting] = useState(false);
 
   const handleDisconnect = async () => {
-    if (!activeConnection) return;
-    setDisconnectError('');
-    const warning = await forgetToken(activeConnection.serverUrl);
-    if (warning) {
-      setDisconnectError(warning);
-      return;
+    if (!activeConnection || disconnecting) return;
+    const connectionId = activeConnection.id;
+    const serverUrl = activeConnection.serverUrl;
+    setDisconnecting(true);
+    try {
+      const warning = await forgetToken(serverUrl);
+      if (warning) setSessionNotice(warning);
+    } catch (error) {
+      const warning = deletionFailure(error);
+      if (warning) setSessionNotice(warning);
+    } finally {
+      removeConnection(connectionId);
+      setDisconnecting(false);
     }
-    removeConnection(activeConnection.id);
   };
 
   if (!activeConnection) {
@@ -81,9 +87,14 @@ function Sidebar({ currentView, onViewChange }: SidebarProps) {
         <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
           {activeConnection.serverUrl}
         </div>
-        <ErrorBanner message={disconnectError} />
-        <button type="button" className="btn btn-secondary" style={{ marginTop: 12, width: '100%' }} onClick={handleDisconnect}>
-          断开此团队
+        <button
+          type="button"
+          className="btn btn-secondary"
+          style={{ marginTop: 12, width: '100%' }}
+          onClick={handleDisconnect}
+          disabled={disconnecting}
+        >
+          {disconnecting ? '正在断开...' : '断开此团队'}
         </button>
       </div>
     </aside>

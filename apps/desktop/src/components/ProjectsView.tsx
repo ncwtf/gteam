@@ -18,7 +18,7 @@ function ProjectsView() {
     return <div className="loading">加载中...</div>;
   }
 
-  if (!activeConnection.token && !bucket?.projectsError) {
+  if (!activeConnection.token) {
     return <div className="loading">正在恢复登录状态...</div>;
   }
 

@@ -339,6 +339,21 @@ pnpm tauri build
 
 构建产物位于 `apps/desktop/src-tauri/target/release/bundle/`
 
+### 发布桌面端
+
+合并到 `main` 会跑测试、服务端 Docker 检查，以及 Linux 桌面构建，**不会**自动改版本号或发布安装包。
+
+要发布新版本：
+
+1. 打开 GitHub 仓库的 Actions，选择 **CI**，点 **Run workflow**，分支选 `main`。
+2. 或者在本机执行：`gh workflow run ci.yml --ref main`
+
+这次运行会把版本号在最新的 `vX.Y.Z` 上加一个补丁号，打四个平台的安装包，并根据自上次正式版以来每个 PR 的「更新说明」生成 Release 和 `latest.json`。桌面端自动更新读的就是这个文件。
+
+如果推送的是已有的 `v*` 标签，流水线会按该标签再发布一次，不会把版本号再加一。
+
+贡献说明也写在 [CONTRIBUTING.md](./CONTRIBUTING.md)。
+
 ## 🛠️ 技术栈
 
 - **后端**: Node.js, Express, WebSocket, PostgreSQL
