@@ -1,14 +1,40 @@
 #!/usr/bin/env bash
 # gteam team server installer.
-# Usage:
-#   gh repo clone ncwtf/gteam && cd gteam && bash scripts/install.sh
-# Non-interactive:
-#   bash scripts/install.sh --yes --http-port 3000 --ws-port 3001
+# One-line install:
+#   curl -fsSL https://raw.githubusercontent.com/ncwtf/gteam/main/scripts/install.sh | bash
+# With options:
+#   curl -fsSL https://raw.githubusercontent.com/ncwtf/gteam/main/scripts/install.sh | bash -s -- --http-port 8080 --ws-port 8081
+# Install dir defaults to /opt/gteam (or ~/gteam without root); override with GTEAM_DIR.
 
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_URL="${GTEAM_REPO:-https://github.com/ncwtf/gteam.git}"
+BRANCH="${GTEAM_BRANCH:-main}"
+
+# When piped through curl, there is no checkout yet: clone, then re-exec from it.
+SELF="${BASH_SOURCE[0]:-}"
+if [[ -n "$SELF" && -f "$SELF" && -f "$(dirname "$SELF")/../docker-compose.yml" ]]; then
+  ROOT="$(cd "$(dirname "$SELF")/.." && pwd)"
+else
+  if [[ -z "${GTEAM_DIR:-}" ]]; then
+    if [[ "$(id -u)" -eq 0 ]]; then GTEAM_DIR=/opt/gteam; else GTEAM_DIR="$HOME/gteam"; fi
+  fi
+  command -v git >/dev/null 2>&1 || { echo "需要 git，请先安装 git" >&2; exit 1; }
+  if [[ -d "$GTEAM_DIR/.git" ]]; then
+    echo "更新 $GTEAM_DIR ..."
+    git -C "$GTEAM_DIR" fetch -q origin "$BRANCH"
+    git -C "$GTEAM_DIR" checkout -q "$BRANCH"
+    git -C "$GTEAM_DIR" pull -q --ff-only origin "$BRANCH"
+  else
+    echo "下载 gteam 到 $GTEAM_DIR ..."
+    git clone -q --depth 1 -b "$BRANCH" "$REPO_URL" "$GTEAM_DIR"
+  fi
+  exec bash "$GTEAM_DIR/scripts/install.sh" "$@"
+fi
 cd "$ROOT"
+
+# Prompts read from the terminal so they work under curl | bash.
+TTY=/dev/tty
 
 HTTP_PORT="${HTTP_PORT:-3000}"
 WS_PORT="${WS_PORT:-3001}"
@@ -72,7 +98,11 @@ ask() {
   fi
   local current="${!var:-$default}"
   local reply
-  read -r -p "$prompt [$current]: " reply || true
+  if [[ -r "$TTY" ]]; then
+    read -r -p "$prompt [$current]: " reply < "$TTY" || true
+  else
+    reply=""
+  fi
   printf -v "$var" '%s' "${reply:-$current}"
 }
 
@@ -110,7 +140,7 @@ while [[ $# -gt 0 ]]; do
     --server-url) SERVER_URL="$2"; shift 2 ;;
     --yes|-y) YES=1; shift ;;
     --reinstall) REINSTALL=1; shift ;;
-    -h|--help) usage; exit 0 ;;
+      -h|--help) usage; exit 0 ;;
     *) echo "未知参数: $1" >&2; usage; exit 1 ;;
   esac
 done
