@@ -1,0 +1,24 @@
+{
+  "name": "teamctx",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI-first team context hub: desktop app + MCP server + sync service",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:server": "pnpm --filter @teamctx/server dev",
+    "dev:desktop": "pnpm --filter @teamctx/desktop dev",
+    "dev:mcp": "pnpm --filter @teamctx/mcp-server dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@8.15.0"
+}
