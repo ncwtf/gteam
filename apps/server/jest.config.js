@@ -4,7 +4,8 @@ module.exports = {
   roots: ['<rootDir>/src'],
   testMatch: ['**/__tests__/**/*.ts', '**/*.test.ts'],
   moduleNameMapper: {
-    '^@gteam/shared$': '<rootDir>/../../packages/shared/src/index.ts'
+    '^@gteam/shared$': '<rootDir>/../../packages/shared/src/index.ts',
+    '^(\\.{1,2}/.*)\\.js$': '$1'
   },
   transform: {
     '^.+\\.ts$': ['ts-jest', {
