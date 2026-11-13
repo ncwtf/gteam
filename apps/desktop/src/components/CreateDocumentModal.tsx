@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useStore, createApiClient } from '../store';
 import { DocumentPartition, MemberRole } from '@gteam/shared';
+import { getApiErrorMessage } from '../lib/apiError';
 
 interface CreateDocumentModalProps {
   projectId: string;
@@ -29,7 +30,7 @@ function CreateDocumentModal({ projectId, onClose, onSuccess }: CreateDocumentMo
 
     try {
       const api = createApiClient(activeConnection);
-      await api.post('/api/documents', {
+      const response = await api.post('/api/documents', {
         projectId,
         title,
         content,
@@ -41,11 +42,14 @@ function CreateDocumentModal({ projectId, onClose, onSuccess }: CreateDocumentMo
           tags: tags.split(',').map(t => t.trim()).filter(Boolean)
         }
       });
+      if (response.data?.success === false) {
+        throw new Error(response.data.error || '创建失败');
+      }
 
       onSuccess();
       onClose();
-    } catch (err: any) {
-      setError(err.response?.data?.error || '创建失败');
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, '创建失败'));
     } finally {
       setLoading(false);
     }

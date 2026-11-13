@@ -11,6 +11,7 @@ import {
   TeamConnection
 } from '@gteam/shared';
 import { toWebSocketUrl } from './lib/serverUrl';
+import { normalizeDocument, normalizeIssue, normalizeProject, normalizeRequirement } from './lib/normalize';
 
 interface TeamData {
   projects: Project[];
@@ -19,6 +20,9 @@ interface TeamData {
   issues: Issue[];
   notifications: WSEvent[];
   ws: WebSocket | null;
+  projectsLoaded: boolean;
+  projectsError: string | null;
+  realtimeError: string | null;
 }
 
 interface AppState {
@@ -49,6 +53,12 @@ interface AppState {
   
   // 聚合查询
   getAllNotifications: () => (WSEvent & { connectionId: string })[];
+
+  sessionNotice: string | null;
+  setSessionNotice: (notice: string | null) => void;
+  ensureTeamData: (connectionId: string) => void;
+  setProjectsError: (connectionId: string, error: string) => void;
+  setRealtimeError: (connectionId: string, error: string | null) => void;
 }
 
 // 默认团队数据
@@ -58,8 +68,15 @@ const createDefaultTeamData = (): TeamData => ({
   requirements: [],
   issues: [],
   notifications: [],
-  ws: null
+  ws: null,
+  projectsLoaded: false,
+  projectsError: null,
+  realtimeError: null
 });
+
+function teamBucket(state: { teamData: Record<string, TeamData> }, connectionId: string): TeamData {
+  return state.teamData[connectionId] || createDefaultTeamData();
+}
 
 export const useStore = create<AppState>()(
   persist(
@@ -67,18 +84,42 @@ export const useStore = create<AppState>()(
       connections: [],
       activeConnectionId: null,
       teamData: {},
+      sessionNotice: null,
+
+      setSessionNotice: (notice) => set({ sessionNotice: notice }),
+
+      ensureTeamData: (connectionId) => {
+        set((state) => {
+          if (state.teamData[connectionId]) return state;
+          return {
+            teamData: {
+              ...state.teamData,
+              [connectionId]: createDefaultTeamData()
+            }
+          };
+        });
+      },
 
       addConnection: (connection) => {
-        set((state) => ({
-          connections: [...state.connections, connection],
-          teamData: {
-            ...state.teamData,
-            [connection.id]: createDefaultTeamData()
-          },
-          activeConnectionId: connection.id
-        }));
-        
-        // 自动连接 WebSocket
+        set((state) => {
+          const exists = state.connections.some((item) => item.id === connection.id);
+          const connections = exists
+            ? state.connections.map((item) => (
+              item.id === connection.id
+                ? { ...item, ...connection, isActive: true }
+                : { ...item, isActive: false }
+            ))
+            : [...state.connections.map((item) => ({ ...item, isActive: false })), { ...connection, isActive: true }];
+          return {
+            connections,
+            teamData: {
+              ...state.teamData,
+              [connection.id]: state.teamData[connection.id] || createDefaultTeamData()
+            },
+            activeConnectionId: connection.id
+          };
+        });
+
         get().connectWebSocket(connection.id);
       },
 
@@ -123,48 +164,79 @@ export const useStore = create<AppState>()(
       },
 
       setProjects: (connectionId, projects) => {
+        const list = (Array.isArray(projects) ? projects : []).map(normalizeProject);
         set((state) => ({
           teamData: {
             ...state.teamData,
             [connectionId]: {
-              ...state.teamData[connectionId],
-              projects
+              ...teamBucket(state, connectionId),
+              projects: list,
+              projectsLoaded: true,
+              projectsError: null
+            }
+          }
+        }));
+      },
+
+      setProjectsError: (connectionId, error) => {
+        set((state) => ({
+          teamData: {
+            ...state.teamData,
+            [connectionId]: {
+              ...teamBucket(state, connectionId),
+              projectsLoaded: true,
+              projectsError: error
+            }
+          }
+        }));
+      },
+
+      setRealtimeError: (connectionId, error) => {
+        set((state) => ({
+          teamData: {
+            ...state.teamData,
+            [connectionId]: {
+              ...teamBucket(state, connectionId),
+              realtimeError: error
             }
           }
         }));
       },
 
       setDocuments: (connectionId, documents) => {
+        const list = (Array.isArray(documents) ? documents : []).map(normalizeDocument);
         set((state) => ({
           teamData: {
             ...state.teamData,
             [connectionId]: {
-              ...state.teamData[connectionId],
-              documents
+              ...teamBucket(state, connectionId),
+              documents: list
             }
           }
         }));
       },
 
       setRequirements: (connectionId, requirements) => {
+        const list = (Array.isArray(requirements) ? requirements : []).map(normalizeRequirement);
         set((state) => ({
           teamData: {
             ...state.teamData,
             [connectionId]: {
-              ...state.teamData[connectionId],
-              requirements
+              ...teamBucket(state, connectionId),
+              requirements: list
             }
           }
         }));
       },
 
       setIssues: (connectionId, issues) => {
+        const list = (Array.isArray(issues) ? issues : []).map(normalizeIssue);
         set((state) => ({
           teamData: {
             ...state.teamData,
             [connectionId]: {
-              ...state.teamData[connectionId],
-              issues
+              ...teamBucket(state, connectionId),
+              issues: list
             }
           }
         }));
@@ -180,7 +252,7 @@ export const useStore = create<AppState>()(
               ...state.teamData,
               [connectionId]: {
                 ...teamData,
-                notifications: [notification, ...teamData.notifications].slice(0, 50)
+                notifications: [notification, ...(teamData.notifications || [])].slice(0, 50)
               }
             }
           };
@@ -192,7 +264,7 @@ export const useStore = create<AppState>()(
           teamData: {
             ...state.teamData,
             [connectionId]: {
-              ...state.teamData[connectionId],
+              ...teamBucket(state, connectionId),
               notifications: []
             }
           }
@@ -202,12 +274,24 @@ export const useStore = create<AppState>()(
       connectWebSocket: (connectionId) => {
         const state = get();
         const connection = state.connections.find((c) => c.id === connectionId);
-        const teamData = state.teamData[connectionId];
-        
-        if (!connection || !teamData || teamData.ws) return;
+        if (!connection?.token) return;
+
+        if (!state.teamData[connectionId]) {
+          set((current) => ({
+            teamData: {
+              ...current.teamData,
+              [connectionId]: current.teamData[connectionId] || createDefaultTeamData()
+            }
+          }));
+        }
+
+        const teamData = get().teamData[connectionId];
+        if (!teamData || teamData.ws) return;
 
         const wsUrl = toWebSocketUrl(connection.serverUrl);
         const websocket = new WebSocket(wsUrl);
+
+        let authFailed = false;
 
         websocket.onopen = () => {
           console.log(`WebSocket 已连接: ${connection.teamName}`);
@@ -220,11 +304,16 @@ export const useStore = create<AppState>()(
 
             if (data.type === 'auth_success') {
               console.log(`WebSocket 认证成功: ${connection.teamName}`);
+              get().setRealtimeError(connectionId, null);
               return;
             }
 
             if (data.type === 'auth_error') {
-              console.error(`WebSocket 认证失败: ${connection.teamName}`, data.error);
+              authFailed = true;
+              const message = data.error || '实时连接认证失败';
+              console.error(`WebSocket 认证失败: ${connection.teamName}`, message);
+              get().setRealtimeError(connectionId, message);
+              websocket.close();
               return;
             }
 
@@ -256,30 +345,29 @@ export const useStore = create<AppState>()(
 
         websocket.onclose = () => {
           console.log(`WebSocket 已断开: ${connection.teamName}`);
-          
-          set((state) => ({
+
+          set((current) => ({
             teamData: {
-              ...state.teamData,
+              ...current.teamData,
               [connectionId]: {
-                ...state.teamData[connectionId],
+                ...teamBucket(current, connectionId),
                 ws: null
               }
             }
           }));
 
-          // 重连逻辑
+          if (authFailed) return;
           setTimeout(() => {
-            if (get().connections.find((c) => c.id === connectionId)) {
-              get().connectWebSocket(connectionId);
-            }
+            const current = get().connections.find((item) => item.id === connectionId);
+            if (current?.token) get().connectWebSocket(connectionId);
           }, 5000);
         };
 
-        set((state) => ({
+        set((current) => ({
           teamData: {
-            ...state.teamData,
+            ...current.teamData,
             [connectionId]: {
-              ...state.teamData[connectionId],
+              ...teamBucket(current, connectionId),
               ws: websocket
             }
           }
@@ -307,7 +395,7 @@ export const useStore = create<AppState>()(
         const allNotifications: (WSEvent & { connectionId: string })[] = [];
 
         Object.entries(state.teamData).forEach(([connectionId, data]) => {
-          data.notifications.forEach((notification) => {
+          (data.notifications || []).forEach((notification) => {
             allNotifications.push({ ...notification, connectionId });
           });
         });

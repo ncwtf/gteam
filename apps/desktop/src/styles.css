@@ -150,6 +150,78 @@ body {
   background-color: var(--bg-hover);
 }
 
+.btn-danger {
+  background-color: #c0392b;
+  color: white;
+}
+
+.btn-danger:hover {
+  background-color: #a93226;
+}
+
+.card.selected {
+  outline: 2px solid var(--accent);
+}
+
+.detail-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.detail-content {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 12px;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  padding: 24px;
+}
+
+.modal-card {
+  background-color: white;
+  border-radius: 12px;
+  padding: 32px;
+  width: 100%;
+  max-width: 640px;
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.modal-close {
+  font-size: 24px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  line-height: 1;
+}
+
 .card {
   background-color: white;
   border: 1px solid var(--border-color);
@@ -257,6 +329,10 @@ body {
 }
 
 .error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: 16px;
   background-color: #fee;
   border: 1px solid #fcc;

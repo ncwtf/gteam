@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { randomBytes } from 'crypto';
 import { query, getClient } from '../db';
+import { mapInvite, mapTeam, mapUser } from '../serialize';
 
 const router = Router();
 
@@ -58,7 +59,10 @@ router.post('/setup', async (req, res) => {
       JWT_SECRET,
       { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions
     );
-    res.json({ success: true, data: { user, token, teamName: team.name, teamId: team.id } });
+    res.json({
+      success: true,
+      data: { user: mapUser(user), token, teamName: team.name, teamId: team.id, isAdmin: true }
+    });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
     console.error('初始化错误:', error);
@@ -109,7 +113,7 @@ router.post('/register', async (req, res) => {
 
     res.json({
       success: true,
-      data: { user, token }
+      data: { user: mapUser(user), token }
     });
   } catch (error) {
     console.error('注册错误:', error);
@@ -150,12 +154,7 @@ router.post('/login', async (req, res) => {
     res.json({
       success: true,
       data: {
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          created_at: user.created_at
-        },
+        user: mapUser(user),
         token
       }
     });
@@ -175,7 +174,7 @@ router.get('/me', authenticateToken, async (req, res) => {
       return res.status(404).json({ success: false, error: '用户不存在' });
     }
 
-    res.json({ success: true, data: result.rows[0] });
+    res.json({ success: true, data: mapUser(result.rows[0]) });
   } catch (error) {
     console.error('获取用户信息错误:', error);
     res.status(500).json({ success: false, error: '获取用户信息失败' });
@@ -226,7 +225,7 @@ router.post('/create-invite', authenticateToken, async (req, res) => {
     res.json({
       success: true,
       data: {
-        ...invite,
+        ...mapInvite(invite),
         teamName,
         inviteUrl
       }
@@ -272,6 +271,7 @@ router.post('/join-invite', async (req, res) => {
     let user;
     const existingUser = await query('SELECT * FROM users WHERE email = $1', [email]);
 
+    let isAdmin = false;
     if (existingUser.rows.length > 0) {
       // 用户已存在，验证密码
       user = existingUser.rows[0];
@@ -280,6 +280,9 @@ router.post('/join-invite', async (req, res) => {
         return res.status(401).json({ success: false, error: '邮箱或密码错误' });
       }
     } else {
+      if (String(password).length < 8) {
+        return res.status(400).json({ success: false, error: '密码至少 8 位' });
+      }
       // 创建新用户
       const passwordHash = await bcrypt.hash(password, 10);
       const newUserResult = await query(
@@ -296,18 +299,18 @@ router.post('/join-invite', async (req, res) => {
     );
 
     if (memberCheck.rows.length === 0) {
-      // 添加用户到团队
+      // 添加用户到团队，并只在真正加入时消耗邀请码
       await query(
         'INSERT INTO team_members (team_id, user_id, role, is_admin) VALUES ($1, $2, $3, $4)',
         [invite.team_id, user.id, '其他', false]
       );
+      await query(
+        'UPDATE invites SET current_uses = current_uses + 1 WHERE id = $1',
+        [invite.id]
+      );
+    } else {
+      isAdmin = Boolean(memberCheck.rows[0].is_admin);
     }
-
-    // 更新邀请码使用次数
-    await query(
-      'UPDATE invites SET current_uses = current_uses + 1 WHERE id = $1',
-      [invite.id]
-    );
 
     // 获取团队信息
     const teamResult = await query('SELECT name FROM teams WHERE id = $1', [invite.team_id]);
@@ -323,14 +326,11 @@ router.post('/join-invite', async (req, res) => {
     res.json({
       success: true,
       data: {
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name
-        },
+        user: mapUser(user),
         token,
         teamName,
-        teamId: invite.team_id
+        teamId: invite.team_id,
+        isAdmin
       }
     });
   } catch (error) {
@@ -344,11 +344,14 @@ router.get('/team-info', authenticateToken, async (req, res) => {
   try {
     const userId = (req as any).user.userId;
 
-    // 获取用户所属的第一个团队（简化实现）
+    // 自托管服务器通常一个用户只属于一个团队；有多个时取最早加入的那个
     const teamResult = await query(
-      `SELECT t.* FROM teams t
+      `SELECT t.id, t.organization_id, t.name, t.description, t.created_at, t.updated_at,
+              tm.is_admin, tm.role
+       FROM teams t
        JOIN team_members tm ON t.id = tm.team_id
        WHERE tm.user_id = $1
+       ORDER BY tm.joined_at ASC
        LIMIT 1`,
       [userId]
     );
@@ -357,7 +360,7 @@ router.get('/team-info', authenticateToken, async (req, res) => {
       return res.status(404).json({ success: false, error: '未找到团队' });
     }
 
-    res.json({ success: true, data: teamResult.rows[0] });
+    res.json({ success: true, data: mapTeam(teamResult.rows[0]) });
   } catch (error) {
     console.error('获取团队信息错误:', error);
     res.status(500).json({ success: false, error: '获取团队信息失败' });

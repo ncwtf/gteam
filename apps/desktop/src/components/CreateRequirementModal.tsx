@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useStore, createApiClient } from '../store';
+import { getApiErrorMessage } from '../lib/apiError';
 
 interface CreateRequirementModalProps {
   projectId: string;
@@ -27,18 +28,21 @@ function CreateRequirementModal({ projectId, onClose, onSuccess }: CreateRequire
 
     try {
       const api = createApiClient(activeConnection);
-      await api.post('/api/requirements', {
+      const response = await api.post('/api/requirements', {
         projectId,
         title,
         description,
         gitBranch,
         gitRepoUrl: gitRepoUrl || undefined
       });
+      if (response.data?.success === false) {
+        throw new Error(response.data.error || '创建失败');
+      }
 
       onSuccess();
       onClose();
-    } catch (err: any) {
-      setError(err.response?.data?.error || '创建失败');
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, '创建失败'));
     } finally {
       setLoading(false);
     }

@@ -300,7 +300,8 @@ if [[ "$HTTP_PORT" == "$WS_PORT" ]]; then
   exit 1
 fi
 
-# A rerun with an existing .env skips port checks: the stack may already hold them.
+# 沿用已有 .env 时跳过端口检查：这些端口多半正被正在运行的容器占用。
+# 全新安装仍检查 HTTP、WebSocket，启用 HTTPS 时再检查 80 和 443。
 if [[ "$REUSE_ENV" -eq 0 ]]; then
   check_port "$HTTP_PORT" "$HTTP_BIND"
   check_port "$WS_PORT" "$WS_BIND"
