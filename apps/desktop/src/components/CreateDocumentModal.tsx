@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useStore, createApiClient } from '../store';
+import { apiErrorMessage } from '../lib/apiError';
 import { DocumentPartition, MemberRole } from '@gteam/shared';
 
 interface CreateDocumentModalProps {
@@ -22,7 +23,10 @@ function CreateDocumentModal({ projectId, onClose, onSuccess }: CreateDocumentMo
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeConnection) return;
+    if (!activeConnection) {
+      setError('没有可用的团队连接');
+      return;
+    }
 
     setError('');
     setLoading(true);
@@ -45,7 +49,7 @@ function CreateDocumentModal({ projectId, onClose, onSuccess }: CreateDocumentMo
       onSuccess();
       onClose();
     } catch (err: any) {
-      setError(err.response?.data?.error || '创建失败');
+      setError(apiErrorMessage(err, '创建失败'));
     } finally {
       setLoading(false);
     }

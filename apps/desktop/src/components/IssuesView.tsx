@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useStore, createApiClient } from '../store';
+import { apiErrorMessage } from '../lib/apiError';
 import CreateIssueModal from './CreateIssueModal';
 
 function IssuesView() {
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const { getActiveConnection, teamData, activeConnectionId, setIssues } = useStore();
   const activeConnection = getActiveConnection();
   const projects = activeConnectionId ? teamData[activeConnectionId]?.projects || [] : [];
@@ -29,8 +31,9 @@ function IssuesView() {
       const api = createApiClient(activeConnection);
       const response = await api.get(`/api/issues?projectId=${selectedProjectId}`);
       setIssues(activeConnection.id, response.data.data);
+      setLoadError('');
     } catch (error) {
-      console.error('加载问题失败:', error);
+      setLoadError(apiErrorMessage(error, '加载问题失败'));
     }
   };
 
@@ -57,6 +60,8 @@ function IssuesView() {
         <h1>问题</h1>
         <button className="btn" onClick={() => setShowCreateModal(true)}>新建问题</button>
       </div>
+
+      {loadError && <div className="error">{loadError}</div>}
       
       <div style={{ marginBottom: '16px' }}>
         <select

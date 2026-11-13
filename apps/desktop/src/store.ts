@@ -10,6 +10,7 @@ import {
   WSEventType,
   TeamConnection
 } from '@gteam/shared';
+import { saveToken, removeToken, getAllTokens } from './lib/secureStore';
 
 interface TeamData {
   projects: Project[];
@@ -68,21 +69,37 @@ export const useStore = create<AppState>()(
       teamData: {},
 
       addConnection: (connection) => {
-        set((state) => ({
-          connections: [...state.connections, connection],
-          teamData: {
-            ...state.teamData,
-            [connection.id]: createDefaultTeamData()
-          },
-          activeConnectionId: connection.id
-        }));
+        const existing = get().connections.find((c) => c.id === connection.id);
+        if (existing) {
+          // 同一服务器同一用户重新登录：只刷新 token，不重复添加
+          get().disconnectWebSocket(connection.id);
+          set((state) => ({
+            connections: state.connections.map((c) =>
+              c.id === connection.id ? { ...c, ...connection, joinedAt: c.joinedAt } : c
+            ),
+            activeConnectionId: connection.id
+          }));
+        } else {
+          set((state) => ({
+            connections: [...state.connections, connection],
+            teamData: {
+              ...state.teamData,
+              [connection.id]: createDefaultTeamData()
+            },
+            activeConnectionId: connection.id
+          }));
+        }
         
+        // token 不进 localStorage，单独存到本地安全存储，重启后恢复
+        saveToken(connection.id, connection.token).catch((e) => console.warn('保存 token 失败', e));
+
         // 自动连接 WebSocket
         get().connectWebSocket(connection.id);
       },
 
       removeConnection: (connectionId) => {
         get().disconnectWebSocket(connectionId);
+        removeToken(connectionId).catch(() => {});
         
         set((state) => {
           const newTeamData = { ...state.teamData };
@@ -126,7 +143,7 @@ export const useStore = create<AppState>()(
           teamData: {
             ...state.teamData,
             [connectionId]: {
-              ...state.teamData[connectionId],
+              ...(state.teamData[connectionId] || createDefaultTeamData()),
               projects
             }
           }
@@ -138,7 +155,7 @@ export const useStore = create<AppState>()(
           teamData: {
             ...state.teamData,
             [connectionId]: {
-              ...state.teamData[connectionId],
+              ...(state.teamData[connectionId] || createDefaultTeamData()),
               documents
             }
           }
@@ -150,7 +167,7 @@ export const useStore = create<AppState>()(
           teamData: {
             ...state.teamData,
             [connectionId]: {
-              ...state.teamData[connectionId],
+              ...(state.teamData[connectionId] || createDefaultTeamData()),
               requirements
             }
           }
@@ -162,7 +179,7 @@ export const useStore = create<AppState>()(
           teamData: {
             ...state.teamData,
             [connectionId]: {
-              ...state.teamData[connectionId],
+              ...(state.teamData[connectionId] || createDefaultTeamData()),
               issues
             }
           }
@@ -340,4 +357,26 @@ export function createApiClient(connection: TeamConnection): AxiosInstance {
       'Content-Type': 'application/json'
     }
   });
+}
+
+/** 启动时从本地安全存储恢复各连接的 token（localStorage 里不保存 token） */
+export async function hydrateTokens(): Promise<void> {
+  // teamData 不持久化：为每个已保存的连接补上默认数据，避免访问 notifications 等字段时报错
+  useStore.setState((state) => {
+    const teamData = { ...state.teamData };
+    for (const c of state.connections) {
+      if (!teamData[c.id]) teamData[c.id] = createDefaultTeamData();
+    }
+    return { teamData };
+  });
+  try {
+    const tokens = await getAllTokens();
+    const { connections, updateConnection } = useStore.getState();
+    for (const c of connections) {
+      const saved = tokens[c.id]?.token;
+      if (!c.token && saved) updateConnection(c.id, { token: saved });
+    }
+  } catch (e) {
+    console.warn('恢复登录状态失败', e);
+  }
 }

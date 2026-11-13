@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useStore, createApiClient } from '../store';
+import { apiErrorMessage } from '../lib/apiError';
 
 interface CreateRequirementModalProps {
   projectId: string;
@@ -20,7 +21,10 @@ function CreateRequirementModal({ projectId, onClose, onSuccess }: CreateRequire
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeConnection) return;
+    if (!activeConnection) {
+      setError('没有可用的团队连接');
+      return;
+    }
 
     setError('');
     setLoading(true);
@@ -38,7 +42,7 @@ function CreateRequirementModal({ projectId, onClose, onSuccess }: CreateRequire
       onSuccess();
       onClose();
     } catch (err: any) {
-      setError(err.response?.data?.error || '创建失败');
+      setError(apiErrorMessage(err, '创建失败'));
     } finally {
       setLoading(false);
     }

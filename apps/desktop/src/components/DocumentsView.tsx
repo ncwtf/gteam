@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useStore, createApiClient } from '../store';
+import { apiErrorMessage } from '../lib/apiError';
 import { DocumentPartition } from '@gteam/shared';
 import CreateDocumentModal from './CreateDocumentModal';
 
 function DocumentsView() {
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const { getActiveConnection, teamData, activeConnectionId, setDocuments } = useStore();
   const activeConnection = getActiveConnection();
   const documents = activeConnectionId ? teamData[activeConnectionId]?.documents || [] : [];
@@ -35,8 +37,9 @@ function DocumentsView() {
       }
       const response = await api.get(`/api/documents?${params}`);
       setDocuments(activeConnection.id, response.data.data);
+      setLoadError('');
     } catch (error) {
-      console.error('加载文档失败:', error);
+      setLoadError(apiErrorMessage(error, '加载文档失败'));
     }
   };
 
@@ -63,6 +66,8 @@ function DocumentsView() {
         <h1>文档</h1>
         <button className="btn" onClick={() => setShowCreateModal(true)}>新建文档</button>
       </div>
+
+      {loadError && <div className="error">{loadError}</div>}
       
       <div style={{ marginBottom: '16px', display: 'flex', gap: '12px' }}>
         <select

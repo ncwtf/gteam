@@ -59,28 +59,45 @@ router.get('/:id', async (req, res) => {
 });
 
 // 创建项目
+// teamId 可选：客户端连接只对应一台服务器，未传时使用当前用户所在的团队
 router.post('/', async (req, res) => {
   try {
     const userId = (req as any).user.userId;
-    const { teamId, name, description, gitRepoUrl } = req.body;
+    const { teamId: rawTeamId, name, description, gitRepoUrl } = req.body || {};
+    const trimmedName = typeof name === 'string' ? name.trim() : '';
 
-    if (!teamId || !name) {
-      return res.status(400).json({ success: false, error: '缺少必要字段' });
+    if (!trimmedName) {
+      return res.status(400).json({ success: false, error: '项目名称不能为空' });
     }
 
-    // 检查是否是团队管理员
+    let teamId: string | undefined = rawTeamId || undefined;
+    if (!teamId) {
+      const teams = await query(
+        'SELECT team_id FROM team_members WHERE user_id = $1 ORDER BY joined_at ASC',
+        [userId]
+      );
+      if (teams.rows.length === 0) {
+        return res.status(403).json({ success: false, error: '你还不是任何团队的成员' });
+      }
+      if (teams.rows.length > 1) {
+        return res.status(400).json({ success: false, error: '你属于多个团队，请指定 teamId' });
+      }
+      teamId = teams.rows[0].team_id;
+    }
+
+    // 必须是该团队成员
     const memberCheck = await query(
       'SELECT is_admin FROM team_members WHERE team_id = $1 AND user_id = $2',
       [teamId, userId]
     );
 
-    if (memberCheck.rows.length === 0 || !memberCheck.rows[0].is_admin) {
-      return res.status(403).json({ success: false, error: '需要管理员权限' });
+    if (memberCheck.rows.length === 0) {
+      return res.status(403).json({ success: false, error: '你不是该团队成员，无法创建项目' });
     }
 
     const result = await query(
       'INSERT INTO projects (team_id, name, description, git_repo_url) VALUES ($1, $2, $3, $4) RETURNING *',
-      [teamId, name, description, gitRepoUrl]
+      [teamId, trimmedName, description || null, gitRepoUrl || null]
     );
 
     res.json({ success: true, data: result.rows[0] });

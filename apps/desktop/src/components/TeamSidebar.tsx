@@ -5,7 +5,7 @@ interface TeamSidebarProps {
 }
 
 function TeamSidebar({ onAddTeam }: TeamSidebarProps) {
-  const { connections, activeConnectionId, setActiveConnection } = useStore();
+  const { connections, activeConnectionId, setActiveConnection, teamData } = useStore();
 
   const getTeamInitials = (teamName: string) => {
     return teamName
@@ -28,7 +28,7 @@ function TeamSidebar({ onAddTeam }: TeamSidebarProps) {
     }}>
       {connections.map((connection) => {
         const isActive = connection.id === activeConnectionId;
-        const hasNotifications = useStore.getState().teamData[connection.id]?.notifications.length > 0;
+        const hasNotifications = (teamData[connection.id]?.notifications?.length ?? 0) > 0;
         
         return (
           <div

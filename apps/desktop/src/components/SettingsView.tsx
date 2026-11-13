@@ -21,7 +21,7 @@ interface WatchedRepo {
 }
 
 function SettingsView() {
-  const { connections, getActiveConnection } = useStore();
+  const { connections, getActiveConnection, removeConnection } = useStore();
   const activeConnection = getActiveConnection();
   const [activeTab, setActiveTab] = useState<'ide' | 'git' | 'about'>('ide');
   const [ideMessage, setIdeMessage] = useState('');
@@ -340,6 +340,19 @@ function SettingsView() {
                 <strong>当前用户:</strong> {activeConnection?.userName}
               </p>
               {activeConnection && <InviteCard connection={activeConnection} />}
+              {activeConnection && (
+                <button
+                  className="btn btn-secondary"
+                  style={{ marginTop: '12px' }}
+                  onClick={() => {
+                    if (window.confirm(`确定要移除团队「${activeConnection.teamName}」吗？（只删除本机的连接，不影响服务器数据）`)) {
+                      removeConnection(activeConnection.id);
+                    }
+                  }}
+                >
+                  移除此团队
+                </button>
+              )}
               <p style={{ color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: '16px' }}>
                 gteam (God Team) 是一个去中心化的团队协作工具，采用 Discord 风格的多团队架构。每个团队自托管独立服务器，桌面客户端可同时连接多个团队，帮助团队成员和他们的 AI 助手之间无缝共享上下文信息。
               </p>

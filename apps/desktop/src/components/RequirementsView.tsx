@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useStore, createApiClient } from '../store';
+import { apiErrorMessage } from '../lib/apiError';
 import CreateRequirementModal from './CreateRequirementModal';
 
 function RequirementsView() {
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const { getActiveConnection, teamData, activeConnectionId, setRequirements } = useStore();
   const activeConnection = getActiveConnection();
   const projects = activeConnectionId ? teamData[activeConnectionId]?.projects || [] : [];
@@ -29,8 +31,9 @@ function RequirementsView() {
       const api = createApiClient(activeConnection);
       const response = await api.get(`/api/requirements?projectId=${selectedProjectId}`);
       setRequirements(activeConnection.id, response.data.data);
+      setLoadError('');
     } catch (error) {
-      console.error('加载需求失败:', error);
+      setLoadError(apiErrorMessage(error, '加载需求失败'));
     }
   };
 
@@ -77,6 +80,8 @@ function RequirementsView() {
         <h1>需求</h1>
         <button className="btn" onClick={() => setShowCreateModal(true)}>新建需求</button>
       </div>
+
+      {loadError && <div className="error">{loadError}</div>}
       
       <div style={{ marginBottom: '16px' }}>
         <select
