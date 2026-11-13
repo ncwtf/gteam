@@ -51,7 +51,12 @@ function App() {
 
   // 如果没有任何团队连接，显示添加团队界面
   if (connections.length === 0) {
-    return <Login onAddTeam={() => setShowAddTeam(true)} />;
+    return (
+      <>
+        <Login onAddTeam={() => setShowAddTeam(true)} />
+        {showAddTeam && <AddTeamModal onClose={() => setShowAddTeam(false)} />}
+      </>
+    );
   }
 
   // 如果没有激活的团队，选择第一个
