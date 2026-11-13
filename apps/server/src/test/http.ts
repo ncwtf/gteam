@@ -14,6 +14,11 @@ export async function withTestServer(
   run: (baseUrl: string) => Promise<void>
 ): Promise<void> {
   const app = express();
+  app.use((_req, res, next) => {
+    // 避免 keep-alive 让 server.close() 一直等到空闲超时（CI 的 Node 18 会超过 Jest 5 秒）
+    res.setHeader('Connection', 'close');
+    next();
+  });
   app.use(express.json());
   mount(app);
 
@@ -25,10 +30,15 @@ export async function withTestServer(
     const address = server.address() as AddressInfo;
     await run(`http://127.0.0.1:${address.port}`);
   } finally {
-    await new Promise<void>((resolve, reject) => {
-      server.close((err) => (err ? reject(err) : resolve()));
-    });
+    await closeServer(server);
   }
+}
+
+function closeServer(server: Server): Promise<void> {
+  return new Promise((resolve, reject) => {
+    server.close((err) => (err ? reject(err) : resolve()));
+    server.closeAllConnections?.();
+  });
 }
 
 export async function jsonRequest(
@@ -40,6 +50,7 @@ export async function jsonRequest(
   if (init.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
+  headers.set('Connection', 'close');
   const response = await fetch(`${baseUrl}${path}`, { ...init, headers });
   const text = await response.text();
   const body = text ? JSON.parse(text) : null;
