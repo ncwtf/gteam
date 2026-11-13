@@ -14,9 +14,53 @@ function AddTeamModal({ onClose }: AddTeamModalProps) {
   const [inviteCode, setInviteCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState<'login' | 'invite'>('login');
+  const [mode, setMode] = useState<'login' | 'invite' | 'setup'>('login');
+  const [teamName, setTeamName] = useState('');
+  const [userName, setUserName] = useState('');
 
   const { addConnection } = useStore();
+
+  // 补全协议、去掉末尾斜杠
+  const normalizeUrl = (raw: string) => {
+    let u = raw.trim().replace(/\/+$/, '');
+    if (u && !/^https?:\/\//i.test(u)) u = `http://${u}`;
+    return u;
+  };
+
+  const handleSetup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const normalizedUrl = normalizeUrl(serverUrl);
+      const response = await axios.post(`${normalizedUrl}/api/auth/setup`, {
+        teamName,
+        name: userName || undefined,
+        email,
+        password
+      });
+      if (response.data.success) {
+        const { user, token, teamName: createdTeam } = response.data.data;
+        addConnection({
+          id: `${normalizedUrl}-${user.id}`,
+          serverUrl: normalizedUrl,
+          teamName: createdTeam || teamName,
+          token,
+          userId: user.id,
+          userName: user.name,
+          isActive: false,
+          joinedAt: new Date()
+        });
+        onClose();
+      } else {
+        setError(response.data.error || '创建失败');
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.error || '无法连接服务器，请检查地址和端口');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,7 +69,7 @@ function AddTeamModal({ onClose }: AddTeamModalProps) {
 
     try {
       // 确保 URL 格式正确
-      const normalizedUrl = serverUrl.replace(/\/$/, '');
+      const normalizedUrl = normalizeUrl(serverUrl);
       
       // 登录获取 token
       const response = await axios.post(`${normalizedUrl}/api/auth/login`, {
@@ -37,9 +81,11 @@ function AddTeamModal({ onClose }: AddTeamModalProps) {
         const { user, token } = response.data.data;
         
         // 获取团队信息
-        const teamResponse = await axios.get(`${normalizedUrl}/api/teams/current`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        const teamResponse = await axios
+          .get(`${normalizedUrl}/api/auth/team-info`, {
+            headers: { Authorization: `Bearer ${token}` }
+          })
+          .catch(() => ({ data: { data: null } }));
 
         const connection: TeamConnection = {
           id: `${normalizedUrl}-${user.id}`,
@@ -58,7 +104,7 @@ function AddTeamModal({ onClose }: AddTeamModalProps) {
         setError(response.data.error || '连接失败');
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || '网络错误');
+      setError(err.response?.data?.error || '无法连接服务器，请检查地址和端口');
     } finally {
       setLoading(false);
     }
@@ -75,13 +121,16 @@ function AddTeamModal({ onClose }: AddTeamModalProps) {
       let parsedInviteCode = inviteCode;
 
       // 支持 gteam:// 深链接
-      if (serverUrl.startsWith('gteam://')) {
-        const url = new URL(serverUrl);
-        parsedServerUrl = `https://${url.hostname}${url.port ? ':' + url.port : ''}`;
-        parsedInviteCode = url.searchParams.get('invite') || url.pathname.replace('/', '');
+      if (serverUrl.trim().startsWith('gteam://')) {
+        const url = new URL(serverUrl.trim());
+        const server = url.searchParams.get('server');
+        parsedServerUrl = server
+          ? server
+          : `https://${url.hostname}${url.port ? ':' + url.port : ''}`;
+        parsedInviteCode = url.searchParams.get('invite') || url.pathname.replace('/', '') || inviteCode;
       }
 
-      parsedServerUrl = parsedServerUrl.replace(/\/$/, '');
+      parsedServerUrl = normalizeUrl(parsedServerUrl);
 
       // 使用邀请码注册/加入
       const response = await axios.post(`${parsedServerUrl}/api/auth/join-invite`, {
@@ -110,7 +159,7 @@ function AddTeamModal({ onClose }: AddTeamModalProps) {
         setError(response.data.error || '加入失败');
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || '网络错误');
+      setError(err.response?.data?.error || '无法连接服务器，请检查地址和端口');
     } finally {
       setLoading(false);
     }
@@ -156,11 +205,46 @@ function AddTeamModal({ onClose }: AddTeamModalProps) {
           >
             使用邀请码
           </button>
+          <button
+            className={mode === 'setup' ? 'btn' : 'btn btn-secondary'}
+            onClick={() => setMode('setup')}
+          >
+            新服务器创建团队
+          </button>
         </div>
 
         {error && <div className="error">{error}</div>}
 
-        {mode === 'login' ? (
+        {mode === 'setup' ? (
+          <form onSubmit={handleSetup}>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: 0 }}>
+              仅适用于刚部署、还没有任何账号的服务器。你会成为团队管理员，之后可在设置里生成邀请码邀请队友。
+            </p>
+            <div className="form-group">
+              <label>团队服务器 URL</label>
+              <input type="text" value={serverUrl} onChange={(e) => setServerUrl(e.target.value)} placeholder="http://your.server:3000" required />
+            </div>
+            <div className="form-group">
+              <label>团队名称</label>
+              <input type="text" value={teamName} onChange={(e) => setTeamName(e.target.value)} required />
+            </div>
+            <div className="form-group">
+              <label>你的昵称</label>
+              <input type="text" value={userName} onChange={(e) => setUserName(e.target.value)} placeholder="可选" />
+            </div>
+            <div className="form-group">
+              <label>邮箱</label>
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            </div>
+            <div className="form-group">
+              <label>设置密码（至少 8 位）</label>
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} required />
+            </div>
+            <button type="submit" className="btn" disabled={loading} style={{ width: '100%' }}>
+              {loading ? '创建中...' : '创建团队'}
+            </button>
+          </form>
+        ) : mode === 'login' ? (
           <form onSubmit={handleLogin}>
             <div className="form-group">
               <label>团队服务器 URL</label>
@@ -168,7 +252,7 @@ function AddTeamModal({ onClose }: AddTeamModalProps) {
                 type="text"
                 value={serverUrl}
                 onChange={(e) => setServerUrl(e.target.value)}
-                placeholder="https://team.example.com"
+                placeholder="http://your.server:3000"
                 required
               />
             </div>

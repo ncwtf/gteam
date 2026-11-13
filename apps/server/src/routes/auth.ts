@@ -2,12 +2,71 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { randomBytes } from 'crypto';
-import { query } from '../db';
+import { query, getClient } from '../db';
 
 const router = Router();
 
 const JWT_SECRET: string = process.env.JWT_SECRET || 'dev-secret-change-in-production';
 const JWT_EXPIRES_IN: string = process.env.JWT_EXPIRES_IN || '7d';
+
+// 服务器初始化状态：全新服务器（还没有任何用户）需要先创建团队
+router.get('/setup-status', async (_req, res) => {
+  try {
+    const r = await query('SELECT COUNT(*)::int AS n FROM users');
+    res.json({ success: true, data: { needsSetup: r.rows[0].n === 0 } });
+  } catch (error) {
+    console.error('获取初始化状态错误:', error);
+    res.status(500).json({ success: false, error: '获取初始化状态失败' });
+  }
+});
+
+// 首次初始化：仅在没有任何用户时可用，创建第一个管理员和团队
+router.post('/setup', async (req, res) => {
+  const { teamName, email, password, name } = req.body || {};
+  if (!teamName || !email || !password) {
+    return res.status(400).json({ success: false, error: '缺少团队名、邮箱或密码' });
+  }
+  if (String(password).length < 8) {
+    return res.status(400).json({ success: false, error: '密码至少 8 位' });
+  }
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
+    // 加锁避免并发初始化
+    await client.query('LOCK TABLE users IN EXCLUSIVE MODE');
+    const count = await client.query('SELECT COUNT(*)::int AS n FROM users');
+    if (count.rows[0].n > 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ success: false, error: '服务器已初始化，请登录或使用邀请码加入' });
+    }
+    const passwordHash = await bcrypt.hash(password, 10);
+    const userResult = await client.query(
+      'INSERT INTO users (email, password_hash, name) VALUES ($1, $2, $3) RETURNING id, email, name, created_at',
+      [email, passwordHash, name || String(email).split('@')[0]]
+    );
+    const user = userResult.rows[0];
+    const teamResult = await client.query('INSERT INTO teams (name) VALUES ($1) RETURNING id, name', [teamName]);
+    const team = teamResult.rows[0];
+    await client.query(
+      'INSERT INTO team_members (team_id, user_id, role, is_admin) VALUES ($1, $2, $3, $4)',
+      [team.id, user.id, '管理员', true]
+    );
+    await client.query('COMMIT');
+
+    const token = jwt.sign(
+      { userId: user.id, email: user.email },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions
+    );
+    res.json({ success: true, data: { user, token, teamName: team.name, teamId: team.id } });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('初始化错误:', error);
+    res.status(500).json({ success: false, error: '初始化失败' });
+  } finally {
+    client.release();
+  }
+});
 
 // 注册
 router.post('/register', async (req, res) => {
@@ -16,6 +75,12 @@ router.post('/register', async (req, res) => {
 
     if (!email || !password || !name) {
       return res.status(400).json({ success: false, error: '缺少必要字段' });
+    }
+
+    // 关闭开放注册：已有用户后，新成员必须通过邀请码加入
+    const anyUser = await query('SELECT 1 FROM users LIMIT 1');
+    if (anyUser.rows.length > 0) {
+      return res.status(403).json({ success: false, error: '请使用邀请码加入团队' });
     }
 
     // 检查用户是否已存在
@@ -156,7 +221,7 @@ router.post('/create-invite', authenticateToken, async (req, res) => {
 
     // 生成邀请链接
     const serverUrl = process.env.SERVER_URL || 'http://localhost:3000';
-    const inviteUrl = `gteam://${serverUrl.replace(/^https?:\/\//, '')}?invite=${code}`;
+    const inviteUrl = `gteam://join?server=${encodeURIComponent(serverUrl)}&invite=${code}`;
 
     res.json({
       success: true,

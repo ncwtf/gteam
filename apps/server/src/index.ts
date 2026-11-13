@@ -42,6 +42,8 @@ async function start() {
 
     // Setup WebSocket
     setupWebSocket(wss);
+    // 同时在 HTTP 端口的 /ws 路径提供 WebSocket，客户端只需一个地址
+    setupWebSocket(new WebSocketServer({ server, path: '/ws' }));
     console.log(`✅ WebSocket 服务器运行在端口 ${WS_PORT}`);
 
     // Start HTTP server
