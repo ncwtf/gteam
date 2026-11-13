@@ -107,6 +107,39 @@ body {
   background-color: var(--accent-hover);
 }
 
+.btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.btn:disabled:hover {
+  background-color: var(--accent);
+}
+
+.btn-secondary:disabled:hover {
+  background-color: var(--bg-secondary);
+}
+
+.update-banner {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 10px 14px;
+  background-color: white;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  color: var(--text-primary);
+  font-size: 14px;
+  max-width: calc(100vw - 32px);
+}
+
 .btn-secondary {
   background-color: var(--bg-secondary);
   color: var(--text-primary);

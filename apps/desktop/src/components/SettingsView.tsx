@@ -1,7 +1,15 @@
 import { useState, useEffect } from 'react';
+import type { Update } from '@tauri-apps/plugin-updater';
 import { useStore } from '../store';
 import { supportedIDEs, writeIDEConfig, copyIDEConfigToClipboard } from '../lib/ideConfig';
 import { startWatchingRepo, stopWatchingRepo, listenToGitProgress, type GitProgressEvent } from '../lib/gitWatcher';
+import {
+  checkForUpdate,
+  formatProgress,
+  formatVersion,
+  getCurrentVersion,
+  installAndRelaunch,
+} from '../lib/updater';
 
 interface WatchedRepo {
   id: string;
@@ -20,6 +28,17 @@ function SettingsView() {
   const [gitBranch, setGitBranch] = useState('');
   const [requirementId, setRequirementId] = useState('');
   const [watchedRepos, setWatchedRepos] = useState<WatchedRepo[]>([]);
+  const [appVersion, setAppVersion] = useState('…');
+  const [updateMessage, setUpdateMessage] = useState('');
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [installingUpdate, setInstallingUpdate] = useState(false);
+  const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
+
+  useEffect(() => {
+    getCurrentVersion().then((version) => {
+      setAppVersion(version ? formatVersion(version) : '未知');
+    });
+  }, []);
 
   useEffect(() => {
     // 监听 Git 进度事件
@@ -74,6 +93,38 @@ function SettingsView() {
       setRequirementId('');
     } catch (error) {
       alert(`添加监控失败: ${error}`);
+    }
+  };
+
+  const handleCheckUpdate = async () => {
+    setCheckingUpdate(true);
+    setUpdateMessage('');
+    const result = await checkForUpdate();
+    if (result.status === 'latest') {
+      setAvailableUpdate(null);
+      setUpdateMessage('已是最新版本');
+    } else if (result.status === 'update') {
+      setAvailableUpdate(result.update);
+      setUpdateMessage(`发现新版本 ${formatVersion(result.update.version)}`);
+    } else {
+      setAvailableUpdate(null);
+      setUpdateMessage('暂时无法检查更新');
+    }
+    setCheckingUpdate(false);
+  };
+
+  const handleInstallUpdate = async () => {
+    if (!availableUpdate) return;
+    setInstallingUpdate(true);
+    setUpdateMessage('正在下载...');
+    try {
+      await installAndRelaunch(availableUpdate, (progress) => {
+        setUpdateMessage(formatProgress(progress));
+      });
+    } catch (error) {
+      console.warn('安装更新失败', error);
+      setUpdateMessage('更新失败');
+      setInstallingUpdate(false);
     }
   };
 
@@ -255,8 +306,29 @@ function SettingsView() {
             <div className="card-title">关于 gteam (God Team)</div>
             <div className="card-content">
               <p style={{ marginBottom: '12px' }}>
-                <strong>版本:</strong> 0.2.0 (多团队架构)
+                <strong>版本:</strong> {appVersion}
               </p>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '12px' }}>
+                <button
+                  className="btn"
+                  onClick={handleCheckUpdate}
+                  disabled={checkingUpdate || installingUpdate}
+                >
+                  {checkingUpdate ? '检查中...' : '检查更新'}
+                </button>
+                {availableUpdate && (
+                  <button
+                    className="btn btn-secondary"
+                    onClick={handleInstallUpdate}
+                    disabled={installingUpdate}
+                  >
+                    立即更新
+                  </button>
+                )}
+              </div>
+              {updateMessage && (
+                <p style={{ marginBottom: '12px' }}>{updateMessage}</p>
+              )}
               <p style={{ marginBottom: '12px' }}>
                 <strong>已连接团队:</strong> {connections.length} 个
               </p>

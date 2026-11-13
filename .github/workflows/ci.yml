@@ -1,8 +1,10 @@
 name: CI
 
 on:
+  # Branch pushes that already have a pull request would otherwise run this
+  # workflow twice. Pull requests cover feature branches; push covers main and tags.
   push:
-    branches: [main, cursor/**]
+    branches: [main]
     tags: ['v*']
   pull_request:
     branches: [main]
@@ -12,6 +14,65 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect changed paths
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      desktop: ${{ steps.filter.outputs.desktop }}
+      server: ${{ steps.filter.outputs.server }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Classify changes
+        id: filter
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BEFORE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          desktop=true
+          server=false
+          changed="$(mktemp)"
+
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base="$BASE_SHA"
+            if ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+              git fetch --no-tags origin "$BASE_REF"
+              base="FETCH_HEAD"
+            fi
+            git diff --name-only "$base" HEAD > "$changed"
+            desktop=false
+            if [ -s "$changed" ] && grep -Ev '^(docs/|scripts/|apps/server/)' "$changed" | grep -q .; then
+              desktop=true
+            fi
+          elif [ "$REF" = "refs/heads/main" ]; then
+            if [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${BEFORE_SHA}^{commit}" 2>/dev/null; then
+              server=true
+              : > "$changed"
+            else
+              git diff --name-only "$BEFORE_SHA" "$HEAD_SHA" > "$changed"
+            fi
+          fi
+
+          if [ -s "$changed" ] && grep -Eq '^(apps/server/|packages/shared/|pnpm-lock\.yaml$|(.*/)?docker-compose\.yml$|(.*/)?Dockerfile$)' "$changed"; then
+            server=true
+          fi
+
+          {
+            echo "desktop=$desktop"
+            echo "server=$server"
+          } >> "$GITHUB_OUTPUT"
+          echo "desktop=$desktop server=$server"
+          echo "changed files:"
+          cat "$changed"
+
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -33,16 +94,17 @@ jobs:
     
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-      
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v2
         with:
           version: 8.15.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'pnpm'
       
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -60,6 +122,8 @@ jobs:
 
   build-desktop:
     name: Build Desktop App
+    needs: [changes]
+    if: always() && !cancelled() && needs.changes.outputs.desktop != 'false'
     strategy:
       fail-fast: false
       # PRs and feature branches build Linux only; main and v* tags build every platform.
@@ -70,27 +134,29 @@ jobs:
     
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-      
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v2
         with:
           version: 8.15.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'pnpm'
       
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
       
+      # shared-key replaces the job id, so the same target reuses one cache on PRs and main.
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: apps/desktop/src-tauri -> target
-          key: ${{ matrix.target }}
+          shared-key: ${{ matrix.target }}
       
       - name: Install dependencies (Ubuntu)
         if: matrix.platform == 'ubuntu-22.04'
@@ -155,6 +221,9 @@ jobs:
           '
       
       - name: Build desktop app
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           cd apps/desktop
           pnpm tauri build --target ${{ matrix.target }}
@@ -165,6 +234,17 @@ jobs:
           name: gteam-${{ matrix.platform }}-${{ matrix.target }}
           path: |
             apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/
+
+  docker-server:
+    name: Docker server image
+    needs: [changes]
+    if: always() && !cancelled() && needs.changes.outputs.server == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build server image
+        run: docker build -f apps/server/Dockerfile .
 
   release:
     name: Publish Release
@@ -177,8 +257,7 @@ jobs:
       group: release-${{ github.repository }}
       cancel-in-progress: false
     steps:
-      - name: Checkout main with tags
-        if: github.ref == 'refs/heads/main'
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -187,16 +266,17 @@ jobs:
         with:
           path: dist
       - name: Create GitHub release
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          files=$(find dist -type f \( -name '*.dmg' -o -name '*.msi' -o -name '*-setup.exe' -o -name '*.deb' -o -name '*.AppImage' -o -name '*.rpm' \))
+          set -euo pipefail
           if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
             if git tag --points-at "${GITHUB_SHA}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
               echo "Commit already has a v* tag; skipping release"
               exit 0
             fi
-            latest=$(git tag -l | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
+            latest=$(git tag -l | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)
             if [ -z "${latest}" ]; then
               echo "No vX.Y.Z tag found" >&2
               exit 1
@@ -208,7 +288,38 @@ jobs:
             patch=${ver##*.}
             tag="v${major}.${minor}.$((patch + 1))"
             echo "Creating ${tag} from ${latest}"
-            gh release create "${tag}" $files -R "${GITHUB_REPOSITORY}" --target "${{ github.sha }}" --title "gteam ${tag}" --generate-notes --prerelease
           else
-            gh release create "${GITHUB_REF_NAME}" $files -R "${GITHUB_REPOSITORY}" --title "gteam ${GITHUB_REF_NAME}" --generate-notes --prerelease
+            tag="${GITHUB_REF_NAME}"
           fi
+
+          node .github/scripts/release-updater.mjs stage \
+            --dist dist \
+            --out release-assets \
+            --manifest updater-platforms.json
+
+          shopt -s nullglob
+          files=(release-assets/*)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "no release assets" >&2
+            exit 1
+          fi
+
+          if gh release view "$tag" -R "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release upload "$tag" "${files[@]}" -R "${GITHUB_REPOSITORY}" --clobber
+          else
+            gh release create "$tag" "${files[@]}" \
+              -R "${GITHUB_REPOSITORY}" \
+              --target "${{ github.sha }}" \
+              --title "gteam ${tag}" \
+              --generate-notes
+          fi
+
+          gh release view "$tag" -R "${GITHUB_REPOSITORY}" --json body --jq '.body // ""' > release-notes.txt
+          node .github/scripts/release-updater.mjs latest \
+            --manifest updater-platforms.json \
+            --version "${tag#v}" \
+            --notes-file release-notes.txt \
+            --tag "$tag" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --out latest.json
+          gh release upload "$tag" latest.json -R "${GITHUB_REPOSITORY}" --clobber
