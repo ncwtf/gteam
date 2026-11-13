@@ -9,7 +9,7 @@ edition = "2021"
 tauri-build = { version = "2.0", features = [] }
 
 [dependencies]
-tauri = { version = "2.0", features = ["notification", "tray-icon"] }
+tauri = { version = "2.0", features = ["tray-icon"] }
 tauri-plugin-notification = "2.0"
 tauri-plugin-shell = "2.0"
 tauri-plugin-store = "2.0"
