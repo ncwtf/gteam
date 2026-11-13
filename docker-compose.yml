@@ -6,9 +6,9 @@ services:
     environment:
       POSTGRES_DB: gteam
       POSTGRES_USER: gteam
-      POSTGRES_PASSWORD: gteam
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gteam}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_BIND:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -16,22 +16,24 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   server:
     build:
       context: .
       dockerfile: apps/server/Dockerfile
     ports:
-      - "3000:3000"
-      - "3001:3001"
+      - "${HTTP_BIND:-0.0.0.0}:${HTTP_PORT:-3000}:3000"
+      - "${WS_BIND:-0.0.0.0}:${WS_PORT:-3001}:3001"
     environment:
       NODE_ENV: production
       PORT: 3000
       WS_PORT: 3001
-      DATABASE_URL: postgresql://gteam:gteam@postgres:5432/gteam
+      DATABASE_URL: postgresql://gteam:${POSTGRES_PASSWORD:-gteam}@postgres:5432/gteam
       JWT_SECRET: ${JWT_SECRET:-change-this-in-production}
-      JWT_EXPIRES_IN: 7d
-      CORS_ORIGIN: "*"
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      SERVER_URL: ${SERVER_URL:-http://localhost:3000}
     depends_on:
       postgres:
         condition: service_healthy
