@@ -225,21 +225,21 @@ await mcp.callTool('list_projects', {});
 
 ### 一键安装 (推荐)
 
-服务器需要：Docker、Docker Compose、git（或 [GitHub CLI](https://cli.github.com/)）。仓库是私有的，先登录有权限的账号。
+服务器需要装好 Docker、Docker Compose 和 git，然后运行：
 
 ```bash
-gh repo clone ncwtf/gteam
-cd gteam
-bash scripts/install.sh
+curl -fsSL https://raw.githubusercontent.com/ncwtf/gteam/main/scripts/install.sh | bash
 ```
 
-脚本会询问 HTTP、WebSocket、数据库端口，并自动生成 JWT 密钥和数据库密码。非交互示例：
+脚本会把代码下载到 `/opt/gteam`（非 root 用户放在 `~/gteam`），依次询问 HTTP、WebSocket、数据库端口，再自动生成 JWT 密钥和数据库密码并启动。
+
+带参数、跳过询问：
 
 ```bash
-bash scripts/install.sh --yes --http-port 8080 --ws-port 8081 --server-url http://your.server:8080
+curl -fsSL https://raw.githubusercontent.com/ncwtf/gteam/main/scripts/install.sh | bash -s -- --yes --http-port 8080 --ws-port 8081 --server-url http://your.server:8080
 ```
 
-安装完成后，在桌面客户端添加团队，服务器地址填脚本打印的 URL。数据库端口默认只绑在 127.0.0.1。
+再次运行同一条命令会更新代码并重启，沿用原来的 `.env`；想重新配置就加 `--reinstall`。
 
 已经有仓库副本时，也可以手动复制 `.env.example` 为 `.env`，改好密钥和端口后再执行 `docker compose up -d --build`。
 
