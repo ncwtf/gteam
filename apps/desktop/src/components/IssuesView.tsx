@@ -1,36 +1,42 @@
 import { useEffect, useState } from 'react';
 import { useStore, createApiClient } from '../store';
 import CreateIssueModal from './CreateIssueModal';
+import { apiErrorMessage } from '../lib/apiError';
+import { formatDateTime, normalizeIssue } from '../lib/normalize';
 
 function IssuesView() {
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const { getActiveConnection, teamData, activeConnectionId, setIssues } = useStore();
+  const [error, setError] = useState('');
+  const { getActiveConnection, teamData, activeConnectionId, resourceErrors, setIssues } = useStore();
   const activeConnection = getActiveConnection();
   const projects = activeConnectionId ? teamData[activeConnectionId]?.projects || [] : [];
   const issues = activeConnectionId ? teamData[activeConnectionId]?.issues || [] : [];
+  const projectsError = activeConnectionId ? resourceErrors[activeConnectionId]?.projects : undefined;
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+  const effectiveProjectId = projects.some((project) => project.id === selectedProjectId)
+    ? selectedProjectId
+    : (projects[0]?.id ?? '');
 
   useEffect(() => {
-    if (projects.length > 0 && !selectedProjectId) {
-      setSelectedProjectId(projects[0].id);
-    }
-  }, [projects]);
-
-  useEffect(() => {
-    if (activeConnection && selectedProjectId) {
+    if (activeConnection && effectiveProjectId) {
       loadIssues();
     }
-  }, [selectedProjectId]);
+  }, [activeConnectionId, effectiveProjectId]);
 
   const loadIssues = async () => {
-    if (!activeConnection || !selectedProjectId) return;
+    if (!activeConnection || !effectiveProjectId) return;
     
     try {
       const api = createApiClient(activeConnection);
-      const response = await api.get(`/api/issues?projectId=${selectedProjectId}`);
-      setIssues(activeConnection.id, response.data.data);
-    } catch (error) {
-      console.error('加载问题失败:', error);
+      const response = await api.get(`/api/issues?projectId=${effectiveProjectId}`);
+      if (!response.data?.success || !Array.isArray(response.data.data)) {
+        setError(response.data?.error || '加载问题失败');
+        return;
+      }
+      setIssues(activeConnection.id, response.data.data.map(normalizeIssue));
+      setError('');
+    } catch (err) {
+      setError(apiErrorMessage(err, '加载问题失败'));
     }
   };
 
@@ -44,9 +50,13 @@ function IssuesView() {
         <div className="header">
           <h1>问题</h1>
         </div>
-        <div className="card">
-          <p style={{ color: 'var(--text-secondary)' }}>请先创建一个项目</p>
-        </div>
+        {projectsError ? (
+          <div className="error">{projectsError}</div>
+        ) : (
+          <div className="card">
+            <p style={{ color: 'var(--text-secondary)' }}>请先创建一个项目</p>
+          </div>
+        )}
       </div>
     );
   }
@@ -55,12 +65,31 @@ function IssuesView() {
     <div>
       <div className="header">
         <h1>问题</h1>
-        <button className="btn" onClick={() => setShowCreateModal(true)}>新建问题</button>
+        <button
+          type="button"
+          className="btn"
+          onClick={() => {
+            if (!effectiveProjectId) {
+              setError('请先选择项目');
+              return;
+            }
+            setShowCreateModal(true);
+          }}
+        >
+          新建问题
+        </button>
       </div>
+
+      {error && (
+        <div className="error" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <span>{error}</span>
+          <button type="button" className="btn btn-secondary" onClick={loadIssues}>重试</button>
+        </div>
+      )}
       
       <div style={{ marginBottom: '16px' }}>
         <select
-          value={selectedProjectId}
+          value={effectiveProjectId}
           onChange={(e) => setSelectedProjectId(e.target.value)}
           style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--border-color)' }}
         >
@@ -72,7 +101,7 @@ function IssuesView() {
         </select>
       </div>
       
-      {issues.length === 0 ? (
+      {issues.length === 0 && !error ? (
         <div className="card">
           <p style={{ color: 'var(--text-secondary)' }}>暂无问题</p>
         </div>
@@ -97,7 +126,7 @@ function IssuesView() {
                 </div>
                 <div className="card-content">{issue.description}</div>
                 <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  {new Date(issue.createdAt).toLocaleString('zh-CN')}
+                  {formatDateTime(issue.createdAt) || '未知时间'}
                 </div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginLeft: '12px' }}>
@@ -128,9 +157,9 @@ function IssuesView() {
         ))
       )}
 
-      {showCreateModal && selectedProjectId && (
+      {showCreateModal && effectiveProjectId && (
         <CreateIssueModal
-          projectId={selectedProjectId}
+          projectId={effectiveProjectId}
           onClose={() => setShowCreateModal(false)}
           onSuccess={loadIssues}
         />

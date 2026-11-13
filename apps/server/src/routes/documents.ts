@@ -4,8 +4,11 @@ import { authenticateToken } from './auth';
 import { PermissionChecker } from '../permissions';
 import { broadcastEvent } from '../websocket';
 import { WSEventType } from '@gteam/shared';
+import { isUuid, requiredText, serializeDocument } from '../serialize';
 
 const router = Router();
+
+const PARTITIONS = ['personal', 'shared', 'collaborative'];
 
 router.use(authenticateToken);
 
@@ -14,6 +17,13 @@ router.get('/', async (req, res) => {
   try {
     const userId = (req as any).user.userId;
     const { projectId, partition } = req.query;
+
+    if (projectId !== undefined && !isUuid(projectId)) {
+      return res.status(400).json({ success: false, error: '项目 ID 无效' });
+    }
+    if (partition !== undefined && !PARTITIONS.includes(String(partition))) {
+      return res.status(400).json({ success: false, error: '无效的文档分区' });
+    }
 
     let queryText = `
       SELECT DISTINCT d.* 
@@ -38,10 +48,43 @@ router.get('/', async (req, res) => {
     queryText += ' ORDER BY d.updated_at DESC';
 
     const result = await query(queryText, params);
-    res.json({ success: true, data: result.rows });
+    res.json({ success: true, data: result.rows.map(serializeDocument) });
   } catch (error) {
     console.error('获取文档列表错误:', error);
     res.status(500).json({ success: false, error: '获取文档列表失败' });
+  }
+});
+
+// 获取文档详情
+router.get('/:id', async (req, res) => {
+  try {
+    const userId = (req as any).user.userId;
+    const documentId = req.params.id;
+
+    if (!isUuid(documentId)) {
+      return res.status(400).json({ success: false, error: '文档 ID 无效' });
+    }
+
+    const permission = await PermissionChecker.check({
+      userId,
+      resourceType: 'document',
+      resourceId: documentId,
+      action: 'read'
+    });
+
+    if (!permission.allowed) {
+      return res.status(403).json({ success: false, error: permission.reason || '无权访问' });
+    }
+
+    const result = await query('SELECT * FROM documents WHERE id = $1', [documentId]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: '文档不存在' });
+    }
+
+    res.json({ success: true, data: serializeDocument(result.rows[0]) });
+  } catch (error) {
+    console.error('获取文档详情错误:', error);
+    res.status(500).json({ success: false, error: '获取文档详情失败' });
   }
 });
 
@@ -49,13 +92,20 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const userId = (req as any).user.userId;
-    const { projectId, title, content, partition, metadata } = req.body;
+    const { projectId, partition, metadata } = req.body || {};
+    const title = requiredText(req.body?.title);
+    const content = requiredText(req.body?.content);
 
-    if (!projectId || !title || !content || !partition) {
-      return res.status(400).json({ success: false, error: '缺少必要字段' });
+    if (!isUuid(projectId) || !title || !content || !partition) {
+      return res.status(400).json({ success: false, error: '请填写项目、标题、内容和分区' });
+    }
+    if (!PARTITIONS.includes(partition)) {
+      return res.status(400).json({ success: false, error: '无效的文档分区' });
+    }
+    if (title.length > 500) {
+      return res.status(400).json({ success: false, error: '文档标题不能超过 500 个字符' });
     }
 
-    // 检查项目权限
     const permission = await PermissionChecker.check({
       userId,
       resourceType: 'project',
@@ -64,7 +114,7 @@ router.post('/', async (req, res) => {
     });
 
     if (!permission.allowed) {
-      return res.status(403).json({ success: false, error: '无权访问该项目' });
+      return res.status(403).json({ success: false, error: permission.reason || '无权访问该项目' });
     }
 
     const result = await query(
@@ -73,21 +123,21 @@ router.post('/', async (req, res) => {
     );
 
     const document = result.rows[0];
+    const serialized = serializeDocument(document);
 
-    // 广播事件
     const projectData = await query('SELECT team_id FROM projects WHERE id = $1', [projectId]);
     if (projectData.rows.length > 0) {
       broadcastEvent({
         type: WSEventType.DocumentCreated,
         teamId: projectData.rows[0].team_id,
         projectId,
-        payload: document,
+        payload: serialized,
         timestamp: new Date(),
         userId
       });
     }
 
-    res.json({ success: true, data: document });
+    res.json({ success: true, data: serialized });
   } catch (error) {
     console.error('创建文档错误:', error);
     res.status(500).json({ success: false, error: '创建文档失败' });
@@ -99,7 +149,11 @@ router.put('/:id', async (req, res) => {
   try {
     const userId = (req as any).user.userId;
     const documentId = req.params.id;
-    const { title, content, metadata } = req.body;
+    const { title, content, metadata } = req.body || {};
+
+    if (!isUuid(documentId)) {
+      return res.status(400).json({ success: false, error: '文档 ID 无效' });
+    }
 
     const permission = await PermissionChecker.check({
       userId,
@@ -114,25 +168,29 @@ router.put('/:id', async (req, res) => {
 
     const result = await query(
       'UPDATE documents SET title = COALESCE($1, title), content = COALESCE($2, content), metadata = COALESCE($3, metadata), updated_at = CURRENT_TIMESTAMP WHERE id = $4 RETURNING *',
-      [title, content, metadata ? JSON.stringify(metadata) : null, documentId]
+      [title ?? null, content ?? null, metadata ? JSON.stringify(metadata) : null, documentId]
     );
 
-    const document = result.rows[0];
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: '文档不存在' });
+    }
 
-    // 广播更新事件
+    const document = result.rows[0];
+    const serialized = serializeDocument(document);
+
     const projectData = await query('SELECT team_id FROM projects WHERE id = $1', [document.project_id]);
     if (projectData.rows.length > 0) {
       broadcastEvent({
         type: WSEventType.DocumentUpdated,
         teamId: projectData.rows[0].team_id,
         projectId: document.project_id,
-        payload: document,
+        payload: serialized,
         timestamp: new Date(),
         userId
       });
     }
 
-    res.json({ success: true, data: document });
+    res.json({ success: true, data: serialized });
   } catch (error) {
     console.error('更新文档错误:', error);
     res.status(500).json({ success: false, error: '更新文档失败' });
@@ -144,6 +202,10 @@ router.delete('/:id', async (req, res) => {
   try {
     const userId = (req as any).user.userId;
     const documentId = req.params.id;
+
+    if (!isUuid(documentId)) {
+      return res.status(400).json({ success: false, error: '文档 ID 无效' });
+    }
 
     const permission = await PermissionChecker.check({
       userId,

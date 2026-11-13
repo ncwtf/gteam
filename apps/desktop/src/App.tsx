@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useStore, createApiClient } from './store';
+import { useStore } from './store';
 import Login from './components/Login';
 import TeamSidebar from './components/TeamSidebar';
 import Sidebar from './components/Sidebar';
@@ -33,22 +33,10 @@ function App() {
   }, [connections.length]);
 
   useEffect(() => {
-    if (activeConnection) {
-      loadTeamData();
+    if (activeConnectionId) {
+      useStore.getState().loadProjects(activeConnectionId);
     }
   }, [activeConnectionId]);
-
-  const loadTeamData = async () => {
-    if (!activeConnection) return;
-
-    try {
-      const api = createApiClient(activeConnection);
-      const response = await api.get('/api/projects');
-      useStore.getState().setProjects(activeConnection.id, response.data.data);
-    } catch (error) {
-      console.error('加载团队数据失败:', error);
-    }
-  };
 
   // 如果没有任何团队连接，显示添加团队界面
   if (connections.length === 0) {

@@ -1,36 +1,42 @@
 import { useEffect, useState } from 'react';
 import { useStore, createApiClient } from '../store';
 import CreateRequirementModal from './CreateRequirementModal';
+import { apiErrorMessage } from '../lib/apiError';
+import { normalizeRequirement } from '../lib/normalize';
 
 function RequirementsView() {
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const { getActiveConnection, teamData, activeConnectionId, setRequirements } = useStore();
+  const [error, setError] = useState('');
+  const { getActiveConnection, teamData, activeConnectionId, resourceErrors, setRequirements } = useStore();
   const activeConnection = getActiveConnection();
   const projects = activeConnectionId ? teamData[activeConnectionId]?.projects || [] : [];
   const requirements = activeConnectionId ? teamData[activeConnectionId]?.requirements || [] : [];
+  const projectsError = activeConnectionId ? resourceErrors[activeConnectionId]?.projects : undefined;
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+  const effectiveProjectId = projects.some((project) => project.id === selectedProjectId)
+    ? selectedProjectId
+    : (projects[0]?.id ?? '');
 
   useEffect(() => {
-    if (projects.length > 0 && !selectedProjectId) {
-      setSelectedProjectId(projects[0].id);
-    }
-  }, [projects]);
-
-  useEffect(() => {
-    if (activeConnection && selectedProjectId) {
+    if (activeConnection && effectiveProjectId) {
       loadRequirements();
     }
-  }, [selectedProjectId]);
+  }, [activeConnectionId, effectiveProjectId]);
 
   const loadRequirements = async () => {
-    if (!activeConnection || !selectedProjectId) return;
+    if (!activeConnection || !effectiveProjectId) return;
     
     try {
       const api = createApiClient(activeConnection);
-      const response = await api.get(`/api/requirements?projectId=${selectedProjectId}`);
-      setRequirements(activeConnection.id, response.data.data);
-    } catch (error) {
-      console.error('加载需求失败:', error);
+      const response = await api.get(`/api/requirements?projectId=${effectiveProjectId}`);
+      if (!response.data?.success || !Array.isArray(response.data.data)) {
+        setError(response.data?.error || '加载需求失败');
+        return;
+      }
+      setRequirements(activeConnection.id, response.data.data.map(normalizeRequirement));
+      setError('');
+    } catch (err) {
+      setError(apiErrorMessage(err, '加载需求失败'));
     }
   };
 
@@ -44,9 +50,13 @@ function RequirementsView() {
         <div className="header">
           <h1>需求</h1>
         </div>
-        <div className="card">
-          <p style={{ color: 'var(--text-secondary)' }}>请先创建一个项目</p>
-        </div>
+        {projectsError ? (
+          <div className="error">{projectsError}</div>
+        ) : (
+          <div className="card">
+            <p style={{ color: 'var(--text-secondary)' }}>请先创建一个项目</p>
+          </div>
+        )}
       </div>
     );
   }
@@ -75,12 +85,31 @@ function RequirementsView() {
     <div>
       <div className="header">
         <h1>需求</h1>
-        <button className="btn" onClick={() => setShowCreateModal(true)}>新建需求</button>
+        <button
+          type="button"
+          className="btn"
+          onClick={() => {
+            if (!effectiveProjectId) {
+              setError('请先选择项目');
+              return;
+            }
+            setShowCreateModal(true);
+          }}
+        >
+          新建需求
+        </button>
       </div>
+
+      {error && (
+        <div className="error" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <span>{error}</span>
+          <button type="button" className="btn btn-secondary" onClick={loadRequirements}>重试</button>
+        </div>
+      )}
       
       <div style={{ marginBottom: '16px' }}>
         <select
-          value={selectedProjectId}
+          value={effectiveProjectId}
           onChange={(e) => setSelectedProjectId(e.target.value)}
           style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--border-color)' }}
         >
@@ -92,7 +121,7 @@ function RequirementsView() {
         </select>
       </div>
       
-      {requirements.length === 0 ? (
+      {requirements.length === 0 && !error ? (
         <div className="card">
           <p style={{ color: 'var(--text-secondary)' }}>暂无需求</p>
         </div>
@@ -108,7 +137,7 @@ function RequirementsView() {
                     padding: '2px 6px',
                     backgroundColor: 'var(--bg-secondary)',
                     borderRadius: '4px'
-                  }}>{req.gitBranch}</code>
+                  }}>{req.gitBranch || '未设置'}</code>
                 </div>
               </div>
               <span style={{
@@ -126,9 +155,9 @@ function RequirementsView() {
         ))
       )}
 
-      {showCreateModal && selectedProjectId && (
+      {showCreateModal && effectiveProjectId && (
         <CreateRequirementModal
-          projectId={selectedProjectId}
+          projectId={effectiveProjectId}
           onClose={() => setShowCreateModal(false)}
           onSuccess={loadRequirements}
         />

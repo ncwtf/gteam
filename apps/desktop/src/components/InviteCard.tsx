@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import axios from 'axios';
 import type { TeamConnection } from '@gteam/shared';
+import { apiErrorMessage } from '../lib/apiError';
+import { normalizeTeam } from '../lib/normalize';
 
 // 管理员生成邀请码；链接里带上客户端当前使用的服务器地址
 function InviteCard({ connection }: { connection: TeamConnection }) {
@@ -16,18 +18,26 @@ function InviteCard({ connection }: { connection: TeamConnection }) {
     setMessage('');
     try {
       const team = await axios.get(`${connection.serverUrl}/api/auth/team-info`, { headers });
-      const teamId = team.data?.data?.id;
-      if (!teamId) throw new Error('未找到团队');
+      const teamInfo = normalizeTeam(team.data?.data);
+      const teamId = connection.teamId || teamInfo.id;
+      if (!team.data?.success || !teamId) {
+        setMessage(team.data?.error || '未找到团队');
+        return;
+      }
       const res = await axios.post(
         `${connection.serverUrl}/api/auth/create-invite`,
         { teamId, expiresInDays: 7 },
         { headers }
       );
       const c = res.data?.data?.code;
+      if (!res.data?.success || !c) {
+        setMessage(res.data?.error || '生成邀请码失败');
+        return;
+      }
       setCode(c);
       setLink(`gteam://join?server=${encodeURIComponent(connection.serverUrl)}&invite=${c}`);
-    } catch (err: any) {
-      setMessage(err.response?.data?.error || err.message || '生成失败');
+    } catch (err) {
+      setMessage(apiErrorMessage(err, '生成邀请码失败'));
     } finally {
       setLoading(false);
     }

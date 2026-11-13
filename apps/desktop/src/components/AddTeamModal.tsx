@@ -2,6 +2,8 @@ import { useState } from 'react';
 import axios from 'axios';
 import { useStore } from '../store';
 import { TeamConnection } from '@gteam/shared';
+import { apiErrorMessage } from '../lib/apiError';
+import { normalizeTeam } from '../lib/normalize';
 
 interface AddTeamModalProps {
   onClose: () => void;
@@ -39,24 +41,27 @@ function AddTeamModal({ onClose }: AddTeamModalProps) {
         email,
         password
       });
-      if (response.data.success) {
-        const { user, token, teamName: createdTeam } = response.data.data;
+      const payload = response.data?.data;
+      if (response.data?.success && payload?.token && payload?.user?.id) {
+        const { user, token, teamName: createdTeam, teamId } = payload;
         addConnection({
           id: `${normalizedUrl}-${user.id}`,
           serverUrl: normalizedUrl,
           teamName: createdTeam || teamName,
+          teamId,
           token,
           userId: user.id,
           userName: user.name,
+          isAdmin: true,
           isActive: false,
           joinedAt: new Date()
         });
         onClose();
       } else {
-        setError(response.data.error || '创建失败');
+        setError(response.data?.error || '服务器返回的登录信息不完整');
       }
-    } catch (err: any) {
-      setError(err.response?.data?.error || '无法连接服务器，请检查地址和端口');
+    } catch (err) {
+      setError(apiErrorMessage(err, '无法连接服务器，请检查地址和端口'));
     } finally {
       setLoading(false);
     }
@@ -77,23 +82,28 @@ function AddTeamModal({ onClose }: AddTeamModalProps) {
         password
       });
 
-      if (response.data.success) {
-        const { user, token } = response.data.data;
-        
-        // 获取团队信息
-        const teamResponse = await axios
-          .get(`${normalizedUrl}/api/auth/team-info`, {
-            headers: { Authorization: `Bearer ${token}` }
-          })
-          .catch(() => ({ data: { data: null } }));
+      const payload = response.data?.data;
+      if (response.data?.success && payload?.token && payload?.user?.id) {
+        const { user, token } = payload;
+
+        const teamResponse = await axios.get(`${normalizedUrl}/api/auth/team-info`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!teamResponse.data?.success || !teamResponse.data.data?.id) {
+          setError(teamResponse.data?.error || '获取团队信息失败');
+          return;
+        }
+        const team = normalizeTeam(teamResponse.data.data);
 
         const connection: TeamConnection = {
           id: `${normalizedUrl}-${user.id}`,
           serverUrl: normalizedUrl,
-          teamName: teamResponse.data.data?.name || 'Team',
+          teamName: team.name || 'Team',
+          teamId: team.id,
           token,
           userId: user.id,
           userName: user.name,
+          ...(typeof team.isAdmin === 'boolean' ? { isAdmin: team.isAdmin } : {}),
           isActive: false,
           joinedAt: new Date()
         };
@@ -101,10 +111,10 @@ function AddTeamModal({ onClose }: AddTeamModalProps) {
         addConnection(connection);
         onClose();
       } else {
-        setError(response.data.error || '连接失败');
+        setError(response.data?.error || '服务器返回的登录信息不完整');
       }
-    } catch (err: any) {
-      setError(err.response?.data?.error || '无法连接服务器，请检查地址和端口');
+    } catch (err) {
+      setError(apiErrorMessage(err, '无法连接服务器，请检查地址和端口'));
     } finally {
       setLoading(false);
     }
@@ -122,7 +132,13 @@ function AddTeamModal({ onClose }: AddTeamModalProps) {
 
       // 支持 gteam:// 深链接
       if (serverUrl.trim().startsWith('gteam://')) {
-        const url = new URL(serverUrl.trim());
+        let url: URL;
+        try {
+          url = new URL(serverUrl.trim());
+        } catch {
+          setError('邀请链接格式不正确');
+          return;
+        }
         const server = url.searchParams.get('server');
         parsedServerUrl = server
           ? server
@@ -139,13 +155,15 @@ function AddTeamModal({ onClose }: AddTeamModalProps) {
         password
       });
 
-      if (response.data.success) {
-        const { user, token, teamName } = response.data.data;
+      const payload = response.data?.data;
+      if (response.data?.success && payload?.token && payload?.user?.id) {
+        const { user, token, teamName, teamId } = payload;
 
         const connection: TeamConnection = {
           id: `${parsedServerUrl}-${user.id}`,
           serverUrl: parsedServerUrl,
           teamName: teamName || 'Team',
+          teamId,
           token,
           userId: user.id,
           userName: user.name,
@@ -156,10 +174,10 @@ function AddTeamModal({ onClose }: AddTeamModalProps) {
         addConnection(connection);
         onClose();
       } else {
-        setError(response.data.error || '加入失败');
+        setError(response.data?.error || '服务器返回的登录信息不完整');
       }
-    } catch (err: any) {
-      setError(err.response?.data?.error || '无法连接服务器，请检查地址和端口');
+    } catch (err) {
+      setError(apiErrorMessage(err, '无法连接服务器，请检查地址和端口'));
     } finally {
       setLoading(false);
     }

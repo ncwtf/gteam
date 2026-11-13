@@ -4,8 +4,11 @@ import { authenticateToken } from './auth';
 import { PermissionChecker } from '../permissions';
 import { broadcastEvent } from '../websocket';
 import { WSEventType } from '@gteam/shared';
+import { isUuid, requiredText, serializeIssue, serializeIssueReply } from '../serialize';
 
 const router = Router();
+
+const PRIORITIES = ['low', 'medium', 'high', 'urgent'];
 
 router.use(authenticateToken);
 
@@ -14,6 +17,10 @@ router.get('/', async (req, res) => {
   try {
     const userId = (req as any).user.userId;
     const { projectId, status } = req.query;
+
+    if (projectId !== undefined && !isUuid(projectId)) {
+      return res.status(400).json({ success: false, error: '项目 ID 无效' });
+    }
 
     let queryText = `
       SELECT DISTINCT i.* 
@@ -38,22 +45,31 @@ router.get('/', async (req, res) => {
     queryText += ' ORDER BY i.created_at DESC';
 
     const result = await query(queryText, params);
-    res.json({ success: true, data: result.rows });
+    res.json({ success: true, data: result.rows.map(serializeIssue) });
   } catch (error) {
     console.error('获取问题列表错误:', error);
     res.status(500).json({ success: false, error: '获取问题列表失败' });
   }
 });
 
-// 创建问题 (AI 或人工)
+// 创建问题 (AI 或人工)。requirementId 可选。
 router.post('/', async (req, res) => {
   try {
     const userId = (req as any).user.userId;
-    const { projectId, requirementId, title, description, priority, createdByAI } = req.body;
+    const { projectId, requirementId, priority, createdByAI } = req.body || {};
+    const title = requiredText(req.body?.title);
+    const description = requiredText(req.body?.description);
 
-    if (!projectId || !title || !description) {
-      return res.status(400).json({ success: false, error: '缺少必要字段' });
+    if (!isUuid(projectId) || !title || !description) {
+      return res.status(400).json({ success: false, error: '请填写项目、标题和描述' });
     }
+    if (title.length > 500) {
+      return res.status(400).json({ success: false, error: '问题标题不能超过 500 个字符' });
+    }
+    if (requirementId !== undefined && requirementId !== null && requirementId !== '' && !isUuid(requirementId)) {
+      return res.status(400).json({ success: false, error: '需求 ID 无效' });
+    }
+    const safePriority = PRIORITIES.includes(priority) ? priority : 'medium';
 
     const permission = await PermissionChecker.check({
       userId,
@@ -63,15 +79,16 @@ router.post('/', async (req, res) => {
     });
 
     if (!permission.allowed) {
-      return res.status(403).json({ success: false, error: '无权访问该项目' });
+      return res.status(403).json({ success: false, error: permission.reason || '无权访问该项目' });
     }
 
     const result = await query(
       'INSERT INTO issues (project_id, requirement_id, title, description, priority, created_by, created_by_ai) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-      [projectId, requirementId, title, description, priority || 'medium', userId, createdByAI || false]
+      [projectId, requirementId || null, title, description, safePriority, userId, createdByAI === true]
     );
 
     const issue = result.rows[0];
+    const serialized = serializeIssue(issue);
 
     const projectData = await query('SELECT team_id FROM projects WHERE id = $1', [projectId]);
     if (projectData.rows.length > 0) {
@@ -79,13 +96,13 @@ router.post('/', async (req, res) => {
         type: WSEventType.IssueCreated,
         teamId: projectData.rows[0].team_id,
         projectId,
-        payload: issue,
+        payload: serialized,
         timestamp: new Date(),
         userId
       });
     }
 
-    res.json({ success: true, data: issue });
+    res.json({ success: true, data: serialized });
   } catch (error) {
     console.error('创建问题错误:', error);
     res.status(500).json({ success: false, error: '创建问题失败' });
@@ -97,10 +114,14 @@ router.post('/:id/replies', async (req, res) => {
   try {
     const userId = (req as any).user.userId;
     const issueId = req.params.id;
-    const { content, createdByAI } = req.body;
+    const { createdByAI } = req.body || {};
+    const content = requiredText(req.body?.content);
 
+    if (!isUuid(issueId)) {
+      return res.status(400).json({ success: false, error: '问题 ID 无效' });
+    }
     if (!content) {
-      return res.status(400).json({ success: false, error: '缺少内容' });
+      return res.status(400).json({ success: false, error: '请填写回复内容' });
     }
 
     const permission = await PermissionChecker.check({
@@ -116,10 +137,10 @@ router.post('/:id/replies', async (req, res) => {
 
     const result = await query(
       'INSERT INTO issue_replies (issue_id, user_id, content, created_by_ai) VALUES ($1, $2, $3, $4) RETURNING *',
-      [issueId, userId, content, createdByAI || false]
+      [issueId, userId, content, createdByAI === true]
     );
 
-    const reply = result.rows[0];
+    const reply = serializeIssueReply(result.rows[0]);
 
     const issueData = await query('SELECT project_id FROM issues WHERE id = $1', [issueId]);
     if (issueData.rows.length > 0) {
@@ -149,6 +170,10 @@ router.get('/:id/replies', async (req, res) => {
     const userId = (req as any).user.userId;
     const issueId = req.params.id;
 
+    if (!isUuid(issueId)) {
+      return res.status(400).json({ success: false, error: '问题 ID 无效' });
+    }
+
     const permission = await PermissionChecker.check({
       userId,
       resourceType: 'issue',
@@ -157,7 +182,7 @@ router.get('/:id/replies', async (req, res) => {
     });
 
     if (!permission.allowed) {
-      return res.status(403).json({ success: false, error: '无权访问' });
+      return res.status(403).json({ success: false, error: permission.reason || '无权访问' });
     }
 
     const result = await query(
@@ -165,7 +190,7 @@ router.get('/:id/replies', async (req, res) => {
       [issueId]
     );
 
-    res.json({ success: true, data: result.rows });
+    res.json({ success: true, data: result.rows.map(serializeIssueReply) });
   } catch (error) {
     console.error('获取问题回复错误:', error);
     res.status(500).json({ success: false, error: '获取问题回复失败' });

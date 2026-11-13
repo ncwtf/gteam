@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useStore, createApiClient } from '../store';
+import { apiErrorMessage } from '../lib/apiError';
 
 interface CreateRequirementModalProps {
   projectId: string;
@@ -20,25 +21,32 @@ function CreateRequirementModal({ projectId, onClose, onSuccess }: CreateRequire
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeConnection) return;
+    if (!activeConnection) {
+      setError('未选择团队');
+      return;
+    }
 
     setError('');
     setLoading(true);
 
     try {
       const api = createApiClient(activeConnection);
-      await api.post('/api/requirements', {
+      const response = await api.post('/api/requirements', {
         projectId,
-        title,
-        description,
-        gitBranch,
-        gitRepoUrl: gitRepoUrl || undefined
+        title: title.trim(),
+        description: description.trim(),
+        gitBranch: gitBranch.trim(),
+        gitRepoUrl: gitRepoUrl.trim() || undefined
       });
+      if (!response.data?.success) {
+        setError(response.data?.error || '创建需求失败');
+        return;
+      }
 
       onSuccess();
       onClose();
-    } catch (err: any) {
-      setError(err.response?.data?.error || '创建失败');
+    } catch (err) {
+      setError(apiErrorMessage(err, '创建需求失败'));
     } finally {
       setLoading(false);
     }

@@ -13,9 +13,11 @@ export interface TeamConnection {
   id: string; // 本地生成的连接 ID
   serverUrl: string; // 团队服务器 URL
   teamName: string;
+  teamId?: string; // 服务器上的团队 ID，创建项目时需要
   token: string; // 该服务器的 JWT token
   userId: string;
   userName: string;
+  isAdmin?: boolean;
   isActive: boolean; // 当前激活的团队
   joinedAt: Date;
   lastSyncAt?: Date;

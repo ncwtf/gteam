@@ -10,6 +10,10 @@ import {
   WSEventType,
   TeamConnection
 } from '@gteam/shared';
+import { apiErrorMessage } from './lib/apiError';
+import { normalizeProject } from './lib/normalize';
+
+type ResourceKind = 'projects' | 'documents' | 'requirements' | 'issues';
 
 interface TeamData {
   projects: Project[];
@@ -25,6 +29,7 @@ interface AppState {
   connections: TeamConnection[];
   activeConnectionId: string | null;
   teamData: Record<string, TeamData>; // 按 connectionId 隔离数据
+  resourceErrors: Record<string, Partial<Record<ResourceKind, string>>>;
   
   // Actions
   addConnection: (connection: TeamConnection) => void;
@@ -38,6 +43,8 @@ interface AppState {
   setDocuments: (connectionId: string, documents: Document[]) => void;
   setRequirements: (connectionId: string, requirements: Requirement[]) => void;
   setIssues: (connectionId: string, issues: Issue[]) => void;
+  setResourceError: (connectionId: string, resource: ResourceKind, message: string | null) => void;
+  loadProjects: (connectionId: string) => Promise<void>;
   addNotification: (connectionId: string, notification: WSEvent) => void;
   clearNotifications: (connectionId: string) => void;
   
@@ -66,6 +73,7 @@ export const useStore = create<AppState>()(
       connections: [],
       activeConnectionId: null,
       teamData: {},
+      resourceErrors: {},
 
       addConnection: (connection) => {
         set((state) => ({
@@ -88,9 +96,13 @@ export const useStore = create<AppState>()(
           const newTeamData = { ...state.teamData };
           delete newTeamData[connectionId];
           
+          const resourceErrors = { ...state.resourceErrors };
+          delete resourceErrors[connectionId];
+
           return {
             connections: state.connections.filter((c) => c.id !== connectionId),
             teamData: newTeamData,
+            resourceErrors,
             activeConnectionId: state.activeConnectionId === connectionId 
               ? state.connections.find((c) => c.id !== connectionId)?.id || null
               : state.activeConnectionId
@@ -126,6 +138,7 @@ export const useStore = create<AppState>()(
           teamData: {
             ...state.teamData,
             [connectionId]: {
+              ...createDefaultTeamData(),
               ...state.teamData[connectionId],
               projects
             }
@@ -138,6 +151,7 @@ export const useStore = create<AppState>()(
           teamData: {
             ...state.teamData,
             [connectionId]: {
+              ...createDefaultTeamData(),
               ...state.teamData[connectionId],
               documents
             }
@@ -150,6 +164,7 @@ export const useStore = create<AppState>()(
           teamData: {
             ...state.teamData,
             [connectionId]: {
+              ...createDefaultTeamData(),
               ...state.teamData[connectionId],
               requirements
             }
@@ -162,11 +177,48 @@ export const useStore = create<AppState>()(
           teamData: {
             ...state.teamData,
             [connectionId]: {
+              ...createDefaultTeamData(),
               ...state.teamData[connectionId],
               issues
             }
           }
         }));
+      },
+
+      setResourceError: (connectionId, resource, message) => {
+        set((state) => {
+          const current = { ...(state.resourceErrors[connectionId] || {}) };
+          if (message) current[resource] = message;
+          else delete current[resource];
+          return {
+            resourceErrors: {
+              ...state.resourceErrors,
+              [connectionId]: current
+            }
+          };
+        });
+      },
+
+      loadProjects: async (connectionId) => {
+        const connection = get().connections.find((item) => item.id === connectionId);
+        if (!connection) return;
+        if (!connection.token) {
+          get().setResourceError(connectionId, 'projects', '登录已失效，请重新连接团队');
+          return;
+        }
+        try {
+          const api = createApiClient(connection);
+          const response = await api.get('/api/projects');
+          const body = response.data;
+          if (!body?.success || !Array.isArray(body.data)) {
+            get().setResourceError(connectionId, 'projects', body?.error || '加载项目失败');
+            return;
+          }
+          get().setProjects(connectionId, body.data.map(normalizeProject));
+          get().setResourceError(connectionId, 'projects', null);
+        } catch (error) {
+          get().setResourceError(connectionId, 'projects', apiErrorMessage(error, '加载项目失败'));
+        }
       },
 
       addNotification: (connectionId, notification) => {
@@ -191,6 +243,7 @@ export const useStore = create<AppState>()(
           teamData: {
             ...state.teamData,
             [connectionId]: {
+              ...createDefaultTeamData(),
               ...state.teamData[connectionId],
               notifications: []
             }
@@ -201,9 +254,19 @@ export const useStore = create<AppState>()(
       connectWebSocket: (connectionId) => {
         const state = get();
         const connection = state.connections.find((c) => c.id === connectionId);
-        const teamData = state.teamData[connectionId];
-        
-        if (!connection || !teamData || teamData.ws) return;
+        if (!connection) return;
+
+        if (!state.teamData[connectionId]) {
+          set((current) => ({
+            teamData: {
+              ...current.teamData,
+              [connectionId]: current.teamData[connectionId] || createDefaultTeamData()
+            }
+          }));
+        }
+
+        const teamData = get().teamData[connectionId];
+        if (!teamData || teamData.ws) return;
 
         const wsUrl = connection.serverUrl.replace(/^http/, 'ws').replace(/\/+$/, '') + '/ws';
         const websocket = new WebSocket(wsUrl);
@@ -223,7 +286,11 @@ export const useStore = create<AppState>()(
             }
 
             if (data.type === 'auth_error') {
-              console.error(`WebSocket 认证失败: ${connection.teamName}`, data.error);
+              get().setResourceError(
+                connectionId,
+                'projects',
+                typeof data.error === 'string' && data.error.trim() ? data.error : '实时连接认证失败，请重新连接团队'
+              );
               return;
             }
 

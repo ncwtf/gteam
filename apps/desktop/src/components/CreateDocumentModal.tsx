@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useStore, createApiClient } from '../store';
 import { DocumentPartition, MemberRole } from '@gteam/shared';
+import { apiErrorMessage } from '../lib/apiError';
 
 interface CreateDocumentModalProps {
   projectId: string;
@@ -22,17 +23,20 @@ function CreateDocumentModal({ projectId, onClose, onSuccess }: CreateDocumentMo
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeConnection) return;
+    if (!activeConnection) {
+      setError('未选择团队');
+      return;
+    }
 
     setError('');
     setLoading(true);
 
     try {
       const api = createApiClient(activeConnection);
-      await api.post('/api/documents', {
+      const response = await api.post('/api/documents', {
         projectId,
-        title,
-        content,
+        title: title.trim(),
+        content: content.trim(),
         partition,
         metadata: {
           projectId,
@@ -41,11 +45,15 @@ function CreateDocumentModal({ projectId, onClose, onSuccess }: CreateDocumentMo
           tags: tags.split(',').map(t => t.trim()).filter(Boolean)
         }
       });
+      if (!response.data?.success) {
+        setError(response.data?.error || '创建文档失败');
+        return;
+      }
 
       onSuccess();
       onClose();
-    } catch (err: any) {
-      setError(err.response?.data?.error || '创建失败');
+    } catch (err) {
+      setError(apiErrorMessage(err, '创建文档失败'));
     } finally {
       setLoading(false);
     }
