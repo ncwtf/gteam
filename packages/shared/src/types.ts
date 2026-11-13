@@ -19,6 +19,8 @@ export interface TeamConnection {
   isActive: boolean; // 当前激活的团队
   joinedAt: Date;
   lastSyncAt?: Date;
+  teamId?: string;
+  isAdmin?: boolean;
 }
 
 export interface InviteLink {
@@ -174,6 +176,11 @@ export interface IssueReply {
 // ============ WebSocket 事件 ============
 
 export enum WSEventType {
+  // 项目事件
+  ProjectCreated = 'project:created',
+  ProjectUpdated = 'project:updated',
+  ProjectDeleted = 'project:deleted',
+
   // 文档事件
   DocumentCreated = 'document:created',
   DocumentUpdated = 'document:updated',
@@ -183,6 +190,7 @@ export enum WSEventType {
   RequirementCreated = 'requirement:created',
   RequirementUpdated = 'requirement:updated',
   RequirementStatusChanged = 'requirement:status_changed',
+  RequirementDeleted = 'requirement:deleted',
   
   // Git 进度事件
   GitProgressUpdated = 'git:progress_updated',
@@ -191,6 +199,7 @@ export enum WSEventType {
   IssueCreated = 'issue:created',
   IssueUpdated = 'issue:updated',
   IssueReplied = 'issue:replied',
+  IssueDeleted = 'issue:deleted',
   
   // 系统事件
   UserJoined = 'user:joined',

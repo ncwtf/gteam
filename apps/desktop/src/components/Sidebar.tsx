@@ -1,4 +1,7 @@
+import { useState } from 'react';
 import { useStore } from '../store';
+import { forgetToken } from '../lib/session';
+import ErrorBanner from './ErrorBanner';
 
 interface SidebarProps {
   currentView: string;
@@ -6,8 +9,20 @@ interface SidebarProps {
 }
 
 function Sidebar({ currentView, onViewChange }: SidebarProps) {
-  const { getActiveConnection } = useStore();
+  const { getActiveConnection, removeConnection } = useStore();
   const activeConnection = getActiveConnection();
+  const [disconnectError, setDisconnectError] = useState('');
+
+  const handleDisconnect = async () => {
+    if (!activeConnection) return;
+    setDisconnectError('');
+    const warning = await forgetToken(activeConnection.serverUrl);
+    if (warning) {
+      setDisconnectError(warning);
+      return;
+    }
+    removeConnection(activeConnection.id);
+  };
 
   if (!activeConnection) {
     return null;
@@ -66,6 +81,10 @@ function Sidebar({ currentView, onViewChange }: SidebarProps) {
         <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
           {activeConnection.serverUrl}
         </div>
+        <ErrorBanner message={disconnectError} />
+        <button type="button" className="btn btn-secondary" style={{ marginTop: 12, width: '100%' }} onClick={handleDisconnect}>
+          断开此团队
+        </button>
       </div>
     </aside>
   );

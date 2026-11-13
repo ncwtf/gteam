@@ -48,6 +48,9 @@ function InviteCard({ connection }: { connection: TeamConnection }) {
       <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '8px 0' }}>
         仅团队管理员可生成，有效期 7 天。队友在「添加团队 → 使用邀请码」里粘贴链接，或填服务器地址和邀请码。
       </p>
+      {connection.isAdmin === false && (
+        <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>只有团队管理员可以生成邀请码。</p>
+      )}
       <button className="btn btn-secondary" onClick={createInvite} disabled={loading}>
         {loading ? '生成中...' : '生成邀请码'}
       </button>
