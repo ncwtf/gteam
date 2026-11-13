@@ -51,6 +51,9 @@ async function currentOs(): Promise<DesktopOs> {
 export async function resolveMcpLaunch(): Promise<McpLaunch> {
   if (inTauri()) {
     try {
+      // The command written into Cursor's mcp.json is this absolute path.
+      // Installed builds resolve gteam-mcp(.exe) beside the app, not the
+      // target-triple filename used before packaging.
       const command = await invoke<string>('mcp_server_path');
       if (command) return { command, args: [] };
     } catch (error) {

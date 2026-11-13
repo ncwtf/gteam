@@ -4,6 +4,7 @@
 mod git_watcher;
 mod keyring_store;
 mod mcp_runtime;
+mod mcp_sidecar_path;
 
 use std::sync::Mutex;
 use tauri::Emitter;

@@ -10,8 +10,14 @@ import {
   WSEventType,
   TeamConnection
 } from '@gteam/shared';
+import { captureLegacyTokens, safeLocalStorage } from './lib/legacySession';
 import { toWebSocketUrl } from './lib/serverUrl';
 import { normalizeDocument, normalizeIssue, normalizeProject, normalizeRequirement } from './lib/normalize';
+
+export type TokenRestoreStatus = 'ready' | 'missing';
+
+/** 在 zustand 把令牌从 localStorage 清掉之前，先抄下旧存储里还在的 JWT。 */
+export const legacyTokenSnapshot = captureLegacyTokens(safeLocalStorage());
 
 interface TeamData {
   projects: Project[];
@@ -56,6 +62,8 @@ interface AppState {
 
   sessionNotice: string | null;
   setSessionNotice: (notice: string | null) => void;
+  tokenRestore: Record<string, TokenRestoreStatus>;
+  setTokenRestore: (connectionId: string, status: TokenRestoreStatus) => void;
   ensureTeamData: (connectionId: string) => void;
   setProjectsError: (connectionId: string, error: string) => void;
   setRealtimeError: (connectionId: string, error: string | null) => void;
@@ -85,8 +93,15 @@ export const useStore = create<AppState>()(
       activeConnectionId: null,
       teamData: {},
       sessionNotice: null,
+      tokenRestore: {},
 
       setSessionNotice: (notice) => set({ sessionNotice: notice }),
+
+      setTokenRestore: (connectionId, status) => {
+        set((state) => ({
+          tokenRestore: { ...state.tokenRestore, [connectionId]: status }
+        }));
+      },
 
       ensureTeamData: (connectionId) => {
         set((state) => {
@@ -130,9 +145,13 @@ export const useStore = create<AppState>()(
           const newTeamData = { ...state.teamData };
           delete newTeamData[connectionId];
           
+          const tokenRestore = { ...state.tokenRestore };
+          delete tokenRestore[connectionId];
+
           return {
             connections: state.connections.filter((c) => c.id !== connectionId),
             teamData: newTeamData,
+            tokenRestore,
             activeConnectionId: state.activeConnectionId === connectionId 
               ? state.connections.find((c) => c.id !== connectionId)?.id || null
               : state.activeConnectionId
@@ -411,8 +430,8 @@ export const useStore = create<AppState>()(
       partialize: (state) => ({
         connections: state.connections.map((c) => ({
           ...c,
-          // 不在 localStorage 中持久化 token，应使用系统 keychain
-          token: '' // TODO: 使用 Tauri 的安全存储
+          // 令牌只放系统密钥链。邮箱可以留下，方便重新登录时填好。
+          token: ''
         })),
         activeConnectionId: state.activeConnectionId
       })

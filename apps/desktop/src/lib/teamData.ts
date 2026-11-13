@@ -3,6 +3,7 @@ import { getApiErrorMessage } from './apiError';
 import { createApiClient, useStore } from '../store';
 
 export async function reloadProjects(connection: TeamConnection): Promise<void> {
+  if (!connection.token) return;
   try {
     const api = createApiClient(connection);
     const response = await api.get('/api/projects');

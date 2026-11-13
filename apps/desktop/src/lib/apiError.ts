@@ -8,6 +8,18 @@ function readServerError(data: unknown): string | null {
   return trimmed || null;
 }
 
+/** Tauri `invoke` 失败时经常直接 reject 字符串，而不是 Error。 */
+export function readErrorText(err: unknown): string {
+  if (typeof err === 'string') return err.trim();
+  if (err instanceof Error && err.message.trim()) return err.message.trim();
+  if (err && typeof err === 'object') {
+    const record = err as { message?: unknown; error?: unknown };
+    if (typeof record.message === 'string' && record.message.trim()) return record.message.trim();
+    if (typeof record.error === 'string' && record.error.trim()) return record.error.trim();
+  }
+  return '';
+}
+
 /** 把接口失败转成给用户看的文字。永远不要只打日志。 */
 export function getApiErrorMessage(err: unknown, fallback: string): string {
   if (axios.isAxiosError(err)) {
@@ -18,8 +30,7 @@ export function getApiErrorMessage(err: unknown, fallback: string): string {
     }
     return `${fallback}（HTTP ${err.response.status}）`;
   }
-  if (err instanceof Error && err.message.trim()) return err.message;
-  return fallback;
+  return readErrorText(err) || fallback;
 }
 
 /** 连接自托管服务器时，404 且没有业务错误体通常表示服务端版本过旧。 */

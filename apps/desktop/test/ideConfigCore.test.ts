@@ -92,6 +92,8 @@ test('cursor merge updates gteam and keeps other servers', () => {
   assert.deepEqual(Object.keys(parsed.mcpServers), ['other', 'gteam']);
   assert.equal(parsed.mcpServers.other.command, 'npx');
   assert.equal(parsed.mcpServers.gteam.command, launch.command);
+  assert.equal(parsed.mcpServers.gteam.command.endsWith('gteam-mcp.exe'), true);
+  assert.equal(parsed.mcpServers.gteam.command.includes('x86_64-pc-windows-msvc'), false);
   assert.equal(JSON.parse(twice).mcpServers.gteam.args.length, 0);
   const names = Object.keys(JSON.parse(twice).mcpServers).filter((name) => name === 'gteam');
   assert.equal(names.length, 1);
