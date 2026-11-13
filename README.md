@@ -223,25 +223,25 @@ await mcp.callTool('list_projects', {});
 
 ## 🐳 部署团队服务器
 
-### 使用 Docker Compose (推荐)
+### 一键安装 (推荐)
 
-每个团队部署一个服务器实例：
+服务器需要：Docker、Docker Compose、git（或 [GitHub CLI](https://cli.github.com/)）。仓库是私有的，先登录有权限的账号。
 
 ```bash
-# 设置 JWT 密钥
-export JWT_SECRET=your-secret-key
-
-# 启动所有服务
-docker-compose up -d
-
-# 查看日志
-docker-compose logs -f
+gh repo clone ncwtf/gteam
+cd gteam
+bash scripts/install.sh
 ```
 
-服务将在以下端口运行:
-- API: http://localhost:3000
-- WebSocket: ws://localhost:3001
-- PostgreSQL: localhost:5432
+脚本会询问 HTTP、WebSocket、数据库端口，并自动生成 JWT 密钥和数据库密码。非交互示例：
+
+```bash
+bash scripts/install.sh --yes --http-port 8080 --ws-port 8081 --server-url http://your.server:8080
+```
+
+安装完成后，在桌面客户端添加团队，服务器地址填脚本打印的 URL。数据库端口默认只绑在 127.0.0.1。
+
+已经有仓库副本时，也可以手动复制 `.env.example` 为 `.env`，改好密钥和端口后再执行 `docker compose up -d --build`。
 
 ### 生产部署建议
 
