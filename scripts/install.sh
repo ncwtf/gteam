@@ -4,6 +4,8 @@
 #   curl -fsSL https://raw.githubusercontent.com/ncwtf/gteam/main/scripts/install.sh | bash
 # With options:
 #   curl -fsSL https://raw.githubusercontent.com/ncwtf/gteam/main/scripts/install.sh | bash -s -- --http-port 8080 --ws-port 8081
+# HTTPS (Caddy + Let's Encrypt), including an existing install in /opt/gteam:
+#   cd /opt/gteam && sudo bash scripts/install.sh --domain team.example.com --email you@example.com
 # Install dir defaults to /opt/gteam (or ~/gteam without root); override with GTEAM_DIR.
 
 set -euo pipefail
@@ -46,8 +48,17 @@ JWT_SECRET="${JWT_SECRET:-}"
 POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-}"
 CORS_ORIGIN="${CORS_ORIGIN:-*}"
 SERVER_URL="${SERVER_URL:-}"
+HTTPS_ENABLED="${HTTPS_ENABLED:-0}"
+CADDY_DOMAIN="${CADDY_DOMAIN:-}"
+CADDY_EMAIL="${CADDY_EMAIL:-}"
 YES=0
 REINSTALL=0
+DOMAIN_SET=0
+EMAIL_SET=0
+SERVER_URL_SET=0
+DOMAIN_ARG=""
+EMAIL_ARG=""
+SERVER_URL_ARG=""
 
 usage() {
   cat <<USAGE
@@ -65,13 +76,23 @@ gteam 团队服务器安装脚本
   --jwt-secret SECRET    JWT 密钥；不填则自动生成
   --cors ORIGIN          CORS 来源 (默认 *)
   --server-url URL       对外访问地址，用于邀请链接
+  --domain HOST          启用 HTTPS，Caddy 用这个域名申请证书
+  --email ADDRESS        Let's Encrypt 通知邮箱，和 --domain 一起用
   --yes, -y              非交互，直接用上面的默认值或参数
   --reinstall            覆盖已有 .env 并重新构建启动
   -h, --help             显示帮助
 
+不传 --domain 时只启动 HTTP，和以前一样。
+已有 .env 时沿用密钥和端口，不再检查端口（进程可能已经占着它们）。
+给装在 /opt/gteam 的现有实例打开 HTTPS:
+
+  cd /opt/gteam
+  sudo bash scripts/install.sh --domain team.example.com --email you@example.com
+
 示例:
   bash scripts/install.sh
   bash scripts/install.sh --yes --http-port 8080 --ws-port 8081
+  bash scripts/install.sh --yes --domain team.example.com --email you@example.com
 USAGE
 }
 
@@ -106,6 +127,34 @@ ask() {
   printf -v "$var" '%s' "${reply:-$current}"
 }
 
+ask_yes() {
+  local prompt="$1" default="$2" var="$3"
+  if [[ "$YES" -eq 1 ]]; then
+    printf -v "$var" '%s' "$default"
+    return
+  fi
+  local hint="y/N"
+  [[ "$default" == "y" ]] && hint="Y/n"
+  local reply
+  if [[ -r "$TTY" ]]; then
+    read -r -p "$prompt [$hint]: " reply < "$TTY" || true
+  else
+    reply=""
+  fi
+  reply="${reply:-$default}"
+  case "$reply" in
+    y|Y|yes|YES) printf -v "$var" '%s' "y" ;;
+    *) printf -v "$var" '%s' "n" ;;
+  esac
+}
+
+normalize_https() {
+  case "${HTTPS_ENABLED:-0}" in
+    1|true|TRUE|yes|YES) HTTPS_ENABLED=1 ;;
+    *) HTTPS_ENABLED=0 ;;
+  esac
+}
+
 port_in_use() {
   local port="$1" bind="$2"
   if command -v ss >/dev/null 2>&1; then
@@ -114,6 +163,14 @@ port_in_use() {
     netstat -lnt 2>/dev/null | awk '{print $4}' | grep -E ":${port}\$" >/dev/null 2>&1
   else
     return 1
+  fi
+}
+
+check_port() {
+  local port="$1" bind="$2"
+  if port_in_use "$port" "$bind"; then
+    echo "端口 ${bind}:${port} 已被占用，请换一个，或先停掉占用它的程序。" >&2
+    exit 1
   fi
 }
 
@@ -137,10 +194,12 @@ while [[ $# -gt 0 ]]; do
     --ws-bind) WS_BIND="$2"; shift 2 ;;
     --jwt-secret) JWT_SECRET="$2"; shift 2 ;;
     --cors) CORS_ORIGIN="$2"; shift 2 ;;
-    --server-url) SERVER_URL="$2"; shift 2 ;;
+    --server-url) SERVER_URL_ARG="$2"; SERVER_URL_SET=1; shift 2 ;;
+    --domain) DOMAIN_ARG="$2"; DOMAIN_SET=1; shift 2 ;;
+    --email) EMAIL_ARG="$2"; EMAIL_SET=1; shift 2 ;;
     --yes|-y) YES=1; shift ;;
     --reinstall) REINSTALL=1; shift ;;
-      -h|--help) usage; exit 0 ;;
+    -h|--help) usage; exit 0 ;;
     *) echo "未知参数: $1" >&2; usage; exit 1 ;;
   esac
 done
@@ -163,17 +222,47 @@ fi
 echo "=== gteam 团队服务器安装 ==="
 echo
 
+REUSE_ENV=0
 if [[ -f .env && "$REINSTALL" -eq 0 ]]; then
-  echo "已存在 .env，将沿用其中的密钥和端口。若要重来，加上 --reinstall。"
+  REUSE_ENV=1
+  echo "已存在 .env，将沿用其中的密钥和端口，并跳过端口检查。若要重来，加上 --reinstall。"
   set -a
   # shellcheck disable=SC1091
   source .env
   set +a
-else
+  normalize_https
+fi
+
+if [[ "$DOMAIN_SET" -eq 1 ]]; then
+  CADDY_DOMAIN="$DOMAIN_ARG"
+  HTTPS_ENABLED=1
+fi
+if [[ "$EMAIL_SET" -eq 1 ]]; then
+  CADDY_EMAIL="$EMAIL_ARG"
+fi
+if [[ "$SERVER_URL_SET" -eq 1 ]]; then
+  SERVER_URL="$SERVER_URL_ARG"
+fi
+normalize_https
+
+if [[ "$REUSE_ENV" -eq 0 ]]; then
   ask "HTTP API 端口" "3000" HTTP_PORT
   ask "WebSocket 端口" "3001" WS_PORT
   ask "PostgreSQL 端口（仅本机可访问）" "5432" POSTGRES_PORT
-  if [[ -z "$SERVER_URL" ]]; then
+
+  if [[ "$DOMAIN_SET" -eq 0 ]]; then
+    ENABLE_HTTPS=n
+    ask_yes "启用 HTTPS（Caddy 自动申请 Let's Encrypt 证书）?" "n" ENABLE_HTTPS
+    if [[ "$ENABLE_HTTPS" == "y" ]]; then
+      HTTPS_ENABLED=1
+      ask "域名" "" CADDY_DOMAIN
+      ask "Let's Encrypt 邮箱" "" CADDY_EMAIL
+    fi
+  fi
+
+  if [[ "$HTTPS_ENABLED" == "1" && "$SERVER_URL_SET" -eq 0 ]]; then
+    SERVER_URL="https://${CADDY_DOMAIN}"
+  elif [[ -z "$SERVER_URL" ]]; then
     SERVER_URL="$(guess_server_url)"
   fi
   ask "对外访问地址（邀请链接会用到）" "$SERVER_URL" SERVER_URL
@@ -186,6 +275,24 @@ else
     POSTGRES_PASSWORD="$(rand_hex)"
     echo "已自动生成数据库密码。"
   fi
+elif [[ "$HTTPS_ENABLED" == "1" && "$SERVER_URL_SET" -eq 0 && "$DOMAIN_SET" -eq 1 ]]; then
+  SERVER_URL="https://${CADDY_DOMAIN}"
+fi
+
+normalize_https
+if [[ "$HTTPS_ENABLED" == "1" ]]; then
+  if [[ -z "$CADDY_DOMAIN" || -z "$CADDY_EMAIL" ]]; then
+    echo "启用 HTTPS 需要域名和邮箱。例如: --domain team.example.com --email you@example.com" >&2
+    exit 1
+  fi
+  if [[ ! "$CADDY_DOMAIN" =~ ^[A-Za-z0-9.-]+$ ]]; then
+    echo "域名无效: $CADDY_DOMAIN" >&2
+    exit 1
+  fi
+  if [[ "$CADDY_EMAIL" != *@* ]]; then
+    echo "邮箱格式不正确: $CADDY_EMAIL" >&2
+    exit 1
+  fi
 fi
 
 if [[ "$HTTP_PORT" == "$WS_PORT" ]]; then
@@ -193,17 +300,16 @@ if [[ "$HTTP_PORT" == "$WS_PORT" ]]; then
   exit 1
 fi
 
-# 沿用 .env 重装时，端口多半正被 gteam 自己的容器占用，跳过检查
-REUSE_ENV=0
-if [[ -f .env && "$REINSTALL" -eq 0 ]]; then REUSE_ENV=1; fi
-[[ "$REUSE_ENV" -eq 1 ]] || for spec in "$HTTP_PORT:$HTTP_BIND" "$WS_PORT:$WS_BIND"; do
-  port="${spec%%:*}"
-  bind="${spec##*:}"
-  if port_in_use "$port" "$bind"; then
-    echo "端口 ${bind}:${port} 已被占用，请换一个，或先停掉占用它的程序。" >&2
-    exit 1
+# 沿用已有 .env 时跳过端口检查：这些端口多半正被正在运行的容器占用。
+# 全新安装仍检查 HTTP、WebSocket，启用 HTTPS 时再检查 80 和 443。
+if [[ "$REUSE_ENV" -eq 0 ]]; then
+  check_port "$HTTP_PORT" "$HTTP_BIND"
+  check_port "$WS_PORT" "$WS_BIND"
+  if [[ "$HTTPS_ENABLED" == "1" ]]; then
+    check_port 80 "0.0.0.0"
+    check_port 443 "0.0.0.0"
   fi
-done
+fi
 
 umask 077
 cat > .env <<ENV
@@ -219,12 +325,20 @@ POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
 JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
 CORS_ORIGIN=${CORS_ORIGIN}
 SERVER_URL=${SERVER_URL}
+HTTPS_ENABLED=${HTTPS_ENABLED}
+CADDY_DOMAIN=${CADDY_DOMAIN}
+CADDY_EMAIL=${CADDY_EMAIL}
 ENV
 chmod 600 .env
 
+COMPOSE_ARGS=(--env-file .env)
+if [[ "$HTTPS_ENABLED" == "1" ]]; then
+  COMPOSE_ARGS+=(--profile https)
+fi
+
 echo
 echo "开始构建并启动（第一次会编译镜像，可能需要几分钟）..."
-"${COMPOSE[@]}" --env-file .env up -d --build
+"${COMPOSE[@]}" "${COMPOSE_ARGS[@]}" up -d --build
 
 echo "等待健康检查..."
 ok=0
@@ -238,6 +352,13 @@ done
 
 echo
 if [[ "$ok" -eq 1 ]]; then
+  if [[ "$HTTPS_ENABLED" == "1" ]]; then
+    if ! "${COMPOSE[@]}" "${COMPOSE_ARGS[@]}" ps | grep -i caddy | grep -qiE 'up|running'; then
+      echo "API 已起来，但 Caddy 没有在运行。80/443 可能被占用，或证书还没签下来。看日志："
+      echo "  ${COMPOSE[*]} --profile https logs caddy"
+      exit 1
+    fi
+  fi
   echo "安装完成。"
 else
   echo "容器已启动，但健康检查还没通过。看日志："
@@ -245,17 +366,41 @@ else
   exit 1
 fi
 
-cat <<DONE
+if [[ "$HTTPS_ENABLED" == "1" ]]; then
+  cat <<DONE
+
+对外地址:    ${SERVER_URL}
+WebSocket:   wss://${CADDY_DOMAIN}/ws
+健康检查:    http://127.0.0.1:${HTTP_PORT}/health
+
+Caddy 会把 https://${CADDY_DOMAIN} 反代到 API，并把 /ws 反代到同一 HTTP 端口上的 WebSocket。
+证书由 Let's Encrypt 自动申请，首次可能要一两分钟。确认 80 和 443 能从公网访问，且域名解析到这台机器。
+
+在桌面客户端添加团队时，服务器地址填：
+  ${SERVER_URL}
+客户端会把 https 自动换成 wss。
+
+数据库端口只绑在 ${POSTGRES_BIND}，不要对公网开放 5432。
+
+常用命令：
+  ${COMPOSE[*]} --profile https logs -f
+  ${COMPOSE[*]} --profile https ps
+  ${COMPOSE[*]} --profile https down
+
+.env 里有密钥，请保管好，不要提交到 git。再次运行本脚本会沿用 HTTPS 设置。
+DONE
+else
+  cat <<DONE
 
 HTTP API:    ${SERVER_URL}
-WebSocket:   把上面地址的 http 换成 ws，端口是 ${WS_PORT}
+WebSocket:   客户端会把服务器地址的 http 换成 ws，并连到 /ws
 健康检查:    http://127.0.0.1:${HTTP_PORT}/health
 
 在桌面客户端添加团队时，服务器地址填：
   ${SERVER_URL}
 
 数据库端口只绑在 ${POSTGRES_BIND}，不要对公网开放 5432。
-生产环境请再配域名和 HTTPS（Caddy / Nginx）。
+需要 HTTPS 时重新运行并加上 --domain 和 --email。
 
 常用命令：
   ${COMPOSE[*]} logs -f
@@ -264,3 +409,4 @@ WebSocket:   把上面地址的 http 换成 ws，端口是 ${WS_PORT}
 
 .env 里有密钥，请保管好，不要提交到 git。
 DONE
+fi

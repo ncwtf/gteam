@@ -1,251 +1,317 @@
-/**
- * IDE 配置生成器
- * 支持 Cursor, Claude Code, Codex, CodeBuddy 等
- */
-
-import { TeamConnection } from '@gteam/shared';
-import { writeTextFile } from '@tauri-apps/plugin-fs';
 import { homeDir } from '@tauri-apps/api/path';
+import { invoke } from '@tauri-apps/api/core';
+import { exists, mkdir, readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
+import { platform } from '@tauri-apps/plugin-os';
+import type { TeamConnection } from '@gteam/shared';
+import {
+  claudeCodeStatus,
+  codeBuddyStatus,
+  codeBuddyWritePath,
+  codexStatus,
+  commandPaths,
+  ideTargets,
+  jsonStatus,
+  mcpEntry,
+  normalizeEntry,
+  parentDir,
+  readCodexGteam,
+  removeClaudeConfig,
+  removeCodexConfig,
+  removeJsonMcp,
+  teamsForMcp,
+  upsertClaudeConfig,
+  upsertCodexConfig,
+  upsertJsonMcp,
+  type CodeBuddyFile,
+  type DesktopOs,
+  type ExpectedMcpConfig,
+  type IdeConfigStatus,
+  type IdeId,
+  type IdeTarget,
+  type McpLaunch,
+  type McpServerEntry,
+} from './ideConfigCore';
 
-export interface IDEConfig {
-  name: string;
+export type { IdeConfigStatus, IdeId, IdeTarget };
+
+export interface IdeInspection extends IdeTarget {
+  status: IdeConfigStatus;
   configPath: string;
-  generateConfig: (connections: TeamConnection[], mcpServerPath: string) => string;
-  description: string;
 }
 
-/**
- * Cursor 配置
- * 路径: ~/.cursor/mcp.json
- */
-export const cursorConfig: IDEConfig = {
-  name: 'Cursor',
-  configPath: '~/.cursor/mcp.json',
-  description: 'Cursor IDE - MCP 配置',
-  generateConfig: (connections, mcpServerPath) => {
-    const teams = connections.map(conn => ({
-      serverUrl: conn.serverUrl,
-      token: conn.token,
-      teamName: conn.teamName
-    }));
-
-    const config = {
-      mcpServers: {
-        gteam: {
-          command: 'node',
-          args: [mcpServerPath],
-          env: {
-            GTEAM_TEAMS: JSON.stringify(teams),
-            GTEAM_DEFAULT_TEAM: connections[0]?.teamName || ''
-          }
-        }
-      }
-    };
-
-    return JSON.stringify(config, null, 2);
-  }
-};
-
-/**
- * Claude Desktop 配置
- * macOS: ~/Library/Application Support/Claude/claude_desktop_config.json
- * Windows: %APPDATA%\Claude\claude_desktop_config.json
- * Linux: ~/.config/claude/config.json
- */
-export const claudeConfig: IDEConfig = {
-  name: 'Claude Desktop',
-  configPath: 'platform-specific', // 会根据平台自动选择
-  description: 'Claude Desktop - MCP 配置',
-  generateConfig: (connections, mcpServerPath) => {
-    const teams = connections.map(conn => ({
-      serverUrl: conn.serverUrl,
-      token: conn.token,
-      teamName: conn.teamName
-    }));
-
-    const config = {
-      mcpServers: {
-        gteam: {
-          command: 'node',
-          args: [mcpServerPath],
-          env: {
-            GTEAM_TEAMS: JSON.stringify(teams),
-            GTEAM_DEFAULT_TEAM: connections[0]?.teamName || ''
-          }
-        }
-      }
-    };
-
-    return JSON.stringify(config, null, 2);
-  }
-};
-
-/**
- * Claude Code 配置
- * 用户范围: ~/.claude.json (推荐) 或使用 `claude mcp add` 命令
- * 项目范围: 项目根目录 .mcp.json
- * 注意: 不是 ~/.claude/mcp.json
- */
-export const claudeCodeConfig: IDEConfig = {
-  name: 'Claude Code',
-  configPath: '~/.claude.json',
-  description: 'Claude Code CLI - 用户范围 MCP 配置',
-  generateConfig: (connections, mcpServerPath) => {
-    const teams = connections.map(conn => ({
-      serverUrl: conn.serverUrl,
-      token: conn.token,
-      teamName: conn.teamName
-    }));
-
-    const config = {
-      mcpServers: {
-        gteam: {
-          command: 'node',
-          args: [mcpServerPath],
-          env: {
-            GTEAM_TEAMS: JSON.stringify(teams),
-            GTEAM_DEFAULT_TEAM: connections[0]?.teamName || ''
-          }
-        }
-      }
-    };
-
-    return JSON.stringify(config, null, 2);
-  }
-};
-
-/**
- * Codex 配置
- * 路径: ~/.codex/config.toml
- * 格式: TOML [mcp_servers.*] 部分
- */
-export const codexConfig: IDEConfig = {
-  name: 'Codex',
-  configPath: '~/.codex/config.toml',
-  description: 'Codex - TOML 格式 MCP 配置',
-  generateConfig: (connections, mcpServerPath) => {
-    const teams = connections.map(conn => ({
-      serverUrl: conn.serverUrl,
-      token: conn.token,
-      teamName: conn.teamName
-    }));
-
-    // Codex 使用 TOML 格式，[mcp_servers.*] 部分
-    let toml = `[mcp_servers.gteam]\n`;
-    toml += `command = "node"\n`;
-    toml += `args = ["${mcpServerPath}"]\n\n`;
-    toml += `[mcp_servers.gteam.env]\n`;
-    toml += `GTEAM_TEAMS = '${JSON.stringify(teams)}'\n`;
-    toml += `GTEAM_DEFAULT_TEAM = "${connections[0]?.teamName || ''}"\n`;
-
-    return toml;
-  }
-};
-
-/**
- * CodeBuddy 配置
- * 路径: ~/.codebuddy/mcp.json
- */
-export const codeBuddyConfig: IDEConfig = {
-  name: 'CodeBuddy',
-  configPath: '~/.codebuddy/mcp.json',
-  description: 'CodeBuddy - MCP 配置',
-  generateConfig: (connections, mcpServerPath) => {
-    const teams = connections.map(conn => ({
-      serverUrl: conn.serverUrl,
-      token: conn.token,
-      teamName: conn.teamName
-    }));
-
-    const config = {
-      mcpServers: {
-        gteam: {
-          command: 'node',
-          args: [mcpServerPath],
-          env: {
-            GTEAM_TEAMS: JSON.stringify(teams),
-            GTEAM_DEFAULT_TEAM: connections[0]?.teamName || ''
-          }
-        }
-      }
-    };
-
-    return JSON.stringify(config, null, 2);
-  }
-};
-
-/**
- * 所有支持的 IDE
- */
-export const supportedIDEs: IDEConfig[] = [
-  cursorConfig,
-  claudeConfig,
-  claudeCodeConfig,
-  codexConfig,
-  codeBuddyConfig
-];
-
-/**
- * 获取 MCP 服务器路径
- */
-export async function getMCPServerPath(): Promise<string> {
-  // 默认路径，实际应该从应用安装位置获取
-  const home = await homeDir();
-  return `${home}/gteam/packages/mcp-server/dist/cli.js`;
+function desktopOs(value: string): DesktopOs {
+  if (value === 'windows' || value === 'macos' || value === 'linux') return value;
+  return 'linux';
 }
 
-/**
- * 写入 IDE 配置文件
- */
-export async function writeIDEConfig(
-  ide: IDEConfig,
-  connections: TeamConnection[]
-): Promise<{ success: boolean; message: string }> {
-  try {
-    const mcpServerPath = await getMCPServerPath();
-    const configContent = ide.generateConfig(connections, mcpServerPath);
+async function currentOs(): Promise<DesktopOs> {
+  return desktopOs(platform());
+}
 
-    // 获取配置文件路径
-    const home = await homeDir();
-    let configPath = ide.configPath.replace('~', home);
-
-    // Claude Desktop 需要根据平台选择路径
-    if (ide.name === 'Claude Desktop') {
-      const platform = await import('@tauri-apps/plugin-os').then(m => m.platform());
-      if (platform === 'macos') {
-        configPath = `${home}/Library/Application Support/Claude/claude_desktop_config.json`;
-      } else if (platform === 'windows') {
-        configPath = `${home}/AppData/Roaming/Claude/claude_desktop_config.json`;
-      } else {
-        configPath = `${home}/.config/claude/config.json`;
+export async function resolveMcpLaunch(): Promise<McpLaunch> {
+  if (inTauri()) {
+    try {
+      const command = await invoke<string>('mcp_server_path');
+      if (command) return { command, args: [] };
+    } catch (error) {
+      if (!import.meta.env.DEV) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(message || '未找到随应用安装的 MCP 程序');
       }
     }
-
-    // 这里简化处理，实际应该合并现有配置
-    await writeTextFile(configPath, configContent);
-
+  }
+  if (import.meta.env.DEV) {
+    const home = (await homeDir()).replace(/[\\/]+$/, '');
+    const sep = home.includes('\\') ? '\\' : '/';
     return {
-      success: true,
-      message: `${ide.name} 配置已写入: ${configPath}`
+      command: 'node',
+      args: [`${home}${sep}gteam${sep}packages${sep}mcp-server${sep}dist${sep}cli.js`],
     };
-  } catch (error: any) {
-    return {
-      success: false,
-      message: `写入失败: ${error.message}`
-    };
+  }
+  throw new Error('未找到随应用安装的 MCP 程序，请重新安装 gteam');
+}
+
+function inTauri(): boolean {
+  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+}
+
+async function pathExists(filePath: string): Promise<boolean> {
+  if (!filePath) return false;
+  if (inTauri()) {
+    try {
+      const [existsOnDisk] = await invoke<boolean[]>('paths_exist', { paths: [filePath] });
+      return Boolean(existsOnDisk);
+    } catch {
+      // Fall through to the fs plugin for paths inside the home scope.
+    }
+  }
+  try {
+    return await exists(filePath);
+  } catch {
+    return false;
   }
 }
 
-/**
- * 复制配置到剪贴板
- */
-export async function copyIDEConfigToClipboard(
-  ide: IDEConfig,
-  connections: TeamConnection[]
-): Promise<void> {
-  const mcpServerPath = await getMCPServerPath();
-  const configContent = ide.generateConfig(connections, mcpServerPath);
+async function pathExistsMap(paths: string[]): Promise<(filePath: string) => boolean> {
+  const unique = [...new Set(paths)];
+  const found = new Map<string, boolean>();
+  if (unique.length === 0) return () => false;
+  if (inTauri()) {
+    try {
+      const flags = await invoke<boolean[]>('paths_exist', { paths: unique });
+      unique.forEach((filePath, index) => found.set(filePath, Boolean(flags[index])));
+      return (filePath) => found.get(filePath) ?? false;
+    } catch {
+      // checked one by one below
+    }
+  }
+  await Promise.all(
+    unique.map(async (filePath) => {
+      found.set(filePath, await pathExists(filePath));
+    }),
+  );
+  return (filePath) => found.get(filePath) ?? false;
+}
 
-  // 使用 Tauri 的剪贴板 API
-  await navigator.clipboard.writeText(configContent);
+async function readIfExists(filePath: string): Promise<string | null> {
+  if (!(await exists(filePath))) return null;
+  return readTextFile(filePath);
+}
+
+function expectedConfig(connections: TeamConnection[], activeConnectionId: string | null, launch: McpLaunch): ExpectedMcpConfig {
+  const { teams, defaultTeam } = teamsForMcp(connections, activeConnectionId);
+  return { launch, teams, defaultTeam };
+}
+
+function entryFor(connections: TeamConnection[], activeConnectionId: string | null, launch: McpLaunch): McpServerEntry {
+  const { teams, defaultTeam } = teamsForMcp(connections, activeConnectionId);
+  return mcpEntry(launch, teams, defaultTeam);
+}
+
+export async function inspectIdes(
+  connections: TeamConnection[],
+  activeConnectionId: string | null,
+): Promise<IdeInspection[]> {
+  const os = await currentOs();
+  const home = await homeDir();
+  const targets = ideTargets(os, home);
+  let launch: McpLaunch | null = null;
+  try {
+    launch = await resolveMcpLaunch();
+  } catch {
+    launch = null;
+  }
+  const expected = launch
+    ? expectedConfig(connections, activeConnectionId, launch)
+    : expectedConfig(connections, activeConnectionId, { command: '', args: [] });
+
+  const inspections: IdeInspection[] = [];
+  for (const target of targets) {
+    const files = await Promise.all(
+      target.paths.map(async (filePath) => ({
+        path: filePath,
+        exists: await exists(filePath).catch(() => false),
+        text: null as string | null,
+      })),
+    );
+    for (const file of files) {
+      if (file.exists) file.text = await readTextFile(file.path);
+    }
+    const texts = files.map((file) => file.text ?? '');
+    const pathArgs = collectCommandPaths(target.id, files.map((file) => (file.exists ? file.text : null)));
+    const existsAt = await pathExistsMap(pathArgs);
+    let status: IdeConfigStatus = 'unconfigured';
+    if (!launch) {
+      status = texts.some((text) => text.includes('"gteam"') || text.includes('mcp_servers.gteam'))
+        ? 'needs_repair'
+        : 'unconfigured';
+    } else if (target.id === 'claude-code') {
+      status = claudeCodeStatus(files[0].exists ? files[0].text : null, expected, existsAt);
+    } else if (target.id === 'codex') {
+      status = codexStatus(files[0].exists ? files[0].text : null, expected, existsAt);
+    } else if (target.id === 'codebuddy') {
+      status = codeBuddyStatus(files, expected, existsAt);
+    } else {
+      status = jsonStatus(files[0].exists ? files[0].text : null, expected, existsAt);
+    }
+    const configPath = target.id === 'codebuddy' ? codeBuddyWritePath(files) : target.paths[0];
+    inspections.push({ ...target, status, configPath });
+  }
+  return inspections;
+}
+
+function collectCommandPaths(id: IdeId, texts: Array<string | null>): string[] {
+  const paths: string[] = [];
+  for (const text of texts) {
+    if (!text) continue;
+    try {
+      if (id === 'codex') {
+        const entry = readCodexGteam(text);
+        if (entry) paths.push(...commandPaths(entry));
+        continue;
+      }
+      const doc = JSON.parse(text) as { mcpServers?: { gteam?: unknown }; projects?: Record<string, { mcpServers?: { gteam?: unknown } }> };
+      const entries = [normalizeEntry(doc?.mcpServers?.gteam)];
+      for (const project of Object.values(doc?.projects ?? {})) {
+        entries.push(normalizeEntry(project?.mcpServers?.gteam));
+      }
+      for (const entry of entries) {
+        if (entry) paths.push(...commandPaths(entry));
+      }
+    } catch {
+      // The status helpers report a file that cannot be parsed.
+    }
+  }
+  return paths;
+}
+
+async function writeConfig(filePath: string, contents: string): Promise<void> {
+  await mkdir(parentDir(filePath), { recursive: true });
+  await writeTextFile(filePath, contents);
+}
+
+export async function configureIde(
+  id: IdeId,
+  connections: TeamConnection[],
+  activeConnectionId: string | null,
+): Promise<{ success: boolean; message: string }> {
+  if (connections.length === 0) {
+    return { success: false, message: '请先添加团队，再配置 IDE' };
+  }
+  try {
+    const launch = await resolveMcpLaunch();
+    const entry = entryFor(connections, activeConnectionId, launch);
+    const os = await currentOs();
+    const home = await homeDir();
+    const target = ideTargets(os, home).find((item) => item.id === id);
+    if (!target) return { success: false, message: '未知的 IDE' };
+
+    if (id === 'codebuddy') {
+      const files: CodeBuddyFile[] = await Promise.all(
+        target.paths.map(async (filePath) => ({
+          path: filePath,
+          exists: await exists(filePath).catch(() => false),
+          text: null,
+        })),
+      );
+      for (const file of files) {
+        if (file.exists) file.text = await readTextFile(file.path);
+      }
+      const destination = codeBuddyWritePath(files);
+      const current = files.find((file) => file.path === destination);
+      await writeConfig(destination, upsertJsonMcp(current?.exists ? current.text : null, entry));
+      for (const file of files) {
+        if (file.path === destination || !file.exists || file.text === null) continue;
+        if (!file.text.includes('"gteam"')) continue;
+        await writeConfig(file.path, removeJsonMcp(file.text));
+      }
+      return { success: true, message: `已写入 ${destination}` };
+    }
+
+    const filePath = target.paths[0];
+    const current = await readIfExists(filePath);
+    const next =
+      id === 'claude-code'
+        ? upsertClaudeConfig(current, entry)
+        : id === 'codex'
+          ? upsertCodexConfig(current, entry)
+          : upsertJsonMcp(current, entry);
+    await writeConfig(filePath, next);
+    return { success: true, message: `已写入 ${filePath}` };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { success: false, message: `写入失败: ${message}` };
+  }
+}
+
+export async function removeIde(id: IdeId): Promise<{ success: boolean; message: string }> {
+  try {
+    const os = await currentOs();
+    const home = await homeDir();
+    const target = ideTargets(os, home).find((item) => item.id === id);
+    if (!target) return { success: false, message: '未知的 IDE' };
+    let removed = 0;
+    for (const filePath of target.paths) {
+      if (!(await exists(filePath).catch(() => false))) continue;
+      const current = await readTextFile(filePath);
+      const hasGteam =
+        id === 'codex'
+          ? /\[mcp_servers\.gteam(?:[.\]])/.test(current)
+          : current.includes('"gteam"');
+      if (!hasGteam) continue;
+      const next =
+        id === 'claude-code'
+          ? removeClaudeConfig(current)
+          : id === 'codex'
+            ? removeCodexConfig(current)
+            : removeJsonMcp(current);
+      await writeTextFile(filePath, next);
+      removed += 1;
+    }
+    if (removed === 0) return { success: true, message: `${target.name} 里没有 gteam 配置` };
+    return { success: true, message: `已从 ${target.name} 移除 gteam` };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { success: false, message: `移除失败: ${message}` };
+  }
+}
+
+export async function copyIdeConfig(
+  id: IdeId,
+  connections: TeamConnection[],
+  activeConnectionId: string | null,
+): Promise<void> {
+  const launch = await resolveMcpLaunch();
+  const entry = entryFor(connections, activeConnectionId, launch);
+  const snippet =
+    id === 'codex'
+      ? upsertCodexConfig('', entry)
+      : JSON.stringify({ mcpServers: { gteam: entry } }, null, 2);
+  await navigator.clipboard.writeText(snippet);
+}
+
+export function statusLabel(status: IdeConfigStatus): string {
+  if (status === 'configured') return '已配置';
+  if (status === 'needs_repair') return '需要修复';
+  return '未配置';
 }

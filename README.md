@@ -231,7 +231,7 @@ await mcp.callTool('list_projects', {});
 curl -fsSL https://raw.githubusercontent.com/ncwtf/gteam/main/scripts/install.sh | bash
 ```
 
-脚本会把代码下载到 `/opt/gteam`（非 root 用户放在 `~/gteam`），依次询问 HTTP、WebSocket、数据库端口，再自动生成 JWT 密钥和数据库密码并启动。
+脚本会把代码下载到 `/opt/gteam`（非 root 用户放在 `~/gteam`），依次询问 HTTP、WebSocket、数据库端口，再自动生成 JWT 密钥和数据库密码并启动。可选地启用 HTTPS（见下文）。
 
 带参数、跳过询问：
 
@@ -239,13 +239,33 @@ curl -fsSL https://raw.githubusercontent.com/ncwtf/gteam/main/scripts/install.sh
 curl -fsSL https://raw.githubusercontent.com/ncwtf/gteam/main/scripts/install.sh | bash -s -- --yes --http-port 8080 --ws-port 8081 --server-url http://your.server:8080
 ```
 
-再次运行同一条命令会更新代码并重启，沿用原来的 `.env`；想重新配置就加 `--reinstall`。
+再次运行同一条命令会更新代码并重启，沿用原来的 `.env`，并且不再检查端口（这些端口可能正被正在运行的容器占用）。想重新配置就加 `--reinstall`。
 
 已经有仓库副本时，也可以手动复制 `.env.example` 为 `.env`，改好密钥和端口后再执行 `docker compose up -d --build`。
 
+### HTTPS（可选）
+
+不传域名时只暴露 HTTP，行为和以前一样。加上 `--domain` 和 `--email` 后，安装脚本会用 Compose profile `https` 启动 Caddy，由 Let's Encrypt 自动签证书，并把 API 以及服务器 HTTP 端口上的 WebSocket 路径 `/ws` 反代出去。选择写在 `.env` 的 `HTTPS_ENABLED`、`CADDY_DOMAIN`、`CADDY_EMAIL` 里，之后再跑安装脚本会继续带上这个 profile。
+
+新机器：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ncwtf/gteam/main/scripts/install.sh | bash -s -- \
+  --domain team.example.com --email you@example.com
+```
+
+已经装在 `/opt/gteam` 的实例，保留现有密钥和端口、打开 HTTPS：
+
+```bash
+cd /opt/gteam
+sudo bash scripts/install.sh --domain team.example.com --email you@example.com
+```
+
+机器的 80 和 443 要能从公网访问，域名要解析到这台机器。全新安装会像检查其他端口一样检查 80 和 443；已有 `.env` 的再次运行会跳过端口检查。证书第一次申请可能要一两分钟。桌面客户端的服务器地址填 `https://team.example.com`，WebSocket 会自动使用 `wss://team.example.com/ws`。
+
 ### 生产部署建议
 
-1. **域名和 HTTPS**: 配置域名和 SSL 证书（如 Caddy / Nginx）
+1. **域名和 HTTPS**: 用上面的 `--domain` / `--email` 交给 Caddy。不要把 5432 暴露到公网
 2. **数据备份**: 定期备份 PostgreSQL 数据库
 3. **环境变量**: 更改默认的 JWT_SECRET
 4. **防火墙**: 限制数据库端口仅内网访问

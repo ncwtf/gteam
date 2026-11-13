@@ -594,10 +594,3 @@ export async function main() {
   const server = new GteamMCPServer(config);
   await server.run();
 }
-
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch((error) => {
-    console.error('服务器错误:', error);
-    process.exit(1);
-  });
-}

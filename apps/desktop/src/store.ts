@@ -10,6 +10,7 @@ import {
   WSEventType,
   TeamConnection
 } from '@gteam/shared';
+import { toWebSocketUrl } from './lib/serverUrl';
 import { normalizeDocument, normalizeIssue, normalizeProject, normalizeRequirement } from './lib/normalize';
 
 interface TeamData {
@@ -287,7 +288,7 @@ export const useStore = create<AppState>()(
         const teamData = get().teamData[connectionId];
         if (!teamData || teamData.ws) return;
 
-        const wsUrl = connection.serverUrl.replace(/^http/, 'ws').replace(/\/+$/, '') + '/ws';
+        const wsUrl = toWebSocketUrl(connection.serverUrl);
         const websocket = new WebSocket(wsUrl);
 
         let authFailed = false;
