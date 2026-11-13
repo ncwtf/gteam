@@ -3,9 +3,8 @@
  * 支持 Cursor, Claude Code, Codex, CodeBuddy 等
  */
 
-import { TeamConnection } from '@teamctx/shared';
-import { writeTextFile, BaseDirectory } from '@tauri-apps/plugin-fs';
-import { message } from '@tauri-apps/plugin-dialog';
+import { TeamConnection } from '@gteam/shared';
+import { writeTextFile } from '@tauri-apps/plugin-fs';
 import { homeDir } from '@tauri-apps/api/path';
 
 export interface IDEConfig {
@@ -32,12 +31,12 @@ export const cursorConfig: IDEConfig = {
 
     const config = {
       mcpServers: {
-        teamctx: {
+        gteam: {
           command: 'node',
           args: [mcpServerPath],
           env: {
-            TEAMCTX_TEAMS: JSON.stringify(teams),
-            TEAMCTX_DEFAULT_TEAM: connections[0]?.teamName || ''
+            GTEAM_TEAMS: JSON.stringify(teams),
+            GTEAM_DEFAULT_TEAM: connections[0]?.teamName || ''
           }
         }
       }
@@ -66,12 +65,12 @@ export const claudeConfig: IDEConfig = {
 
     const config = {
       mcpServers: {
-        teamctx: {
+        gteam: {
           command: 'node',
           args: [mcpServerPath],
           env: {
-            TEAMCTX_TEAMS: JSON.stringify(teams),
-            TEAMCTX_DEFAULT_TEAM: connections[0]?.teamName || ''
+            GTEAM_TEAMS: JSON.stringify(teams),
+            GTEAM_DEFAULT_TEAM: connections[0]?.teamName || ''
           }
         }
       }
@@ -83,12 +82,13 @@ export const claudeConfig: IDEConfig = {
 
 /**
  * Claude Code 配置
- * 路径: ~/.claude/mcp.json 或通过 claude mcp add 命令
+ * 用户范围: ~/.claude.json (推荐)
+ * 项目范围: .mcp.json 或通过 claude mcp add 命令
  */
 export const claudeCodeConfig: IDEConfig = {
   name: 'Claude Code',
-  configPath: '~/.claude/mcp.json',
-  description: 'Claude Code CLI - MCP 配置',
+  configPath: '~/.claude.json',
+  description: 'Claude Code CLI - MCP 配置 (用户范围)',
   generateConfig: (connections, mcpServerPath) => {
     const teams = connections.map(conn => ({
       serverUrl: conn.serverUrl,
@@ -98,12 +98,12 @@ export const claudeCodeConfig: IDEConfig = {
 
     const config = {
       mcpServers: {
-        teamctx: {
+        gteam: {
           command: 'node',
           args: [mcpServerPath],
           env: {
-            TEAMCTX_TEAMS: JSON.stringify(teams),
-            TEAMCTX_DEFAULT_TEAM: connections[0]?.teamName || ''
+            GTEAM_TEAMS: JSON.stringify(teams),
+            GTEAM_DEFAULT_TEAM: connections[0]?.teamName || ''
           }
         }
       }
@@ -129,12 +129,12 @@ export const codexConfig: IDEConfig = {
     }));
 
     // Codex 使用 TOML 格式
-    let toml = `[mcp.servers.teamctx]\n`;
+    let toml = `[mcp.servers.gteam]\n`;
     toml += `command = "node"\n`;
     toml += `args = ["${mcpServerPath}"]\n\n`;
-    toml += `[mcp.servers.teamctx.env]\n`;
-    toml += `TEAMCTX_TEAMS = '${JSON.stringify(teams)}'\n`;
-    toml += `TEAMCTX_DEFAULT_TEAM = "${connections[0]?.teamName || ''}"\n`;
+    toml += `[mcp.servers.gteam.env]\n`;
+    toml += `GTEAM_TEAMS = '${JSON.stringify(teams)}'\n`;
+    toml += `GTEAM_DEFAULT_TEAM = "${connections[0]?.teamName || ''}"\n`;
 
     return toml;
   }
@@ -157,12 +157,12 @@ export const codeBuddyConfig: IDEConfig = {
 
     const config = {
       mcpServers: {
-        teamctx: {
+        gteam: {
           command: 'node',
           args: [mcpServerPath],
           env: {
-            TEAMCTX_TEAMS: JSON.stringify(teams),
-            TEAMCTX_DEFAULT_TEAM: connections[0]?.teamName || ''
+            GTEAM_TEAMS: JSON.stringify(teams),
+            GTEAM_DEFAULT_TEAM: connections[0]?.teamName || ''
           }
         }
       }
@@ -189,7 +189,7 @@ export const supportedIDEs: IDEConfig[] = [
 export async function getMCPServerPath(): Promise<string> {
   // 默认路径，实际应该从应用安装位置获取
   const home = await homeDir();
-  return `${home}/teamctx/packages/mcp-server/dist/cli.js`;
+  return `${home}/gteam/packages/mcp-server/dist/cli.js`;
 }
 
 /**

@@ -6,7 +6,6 @@
 import simpleGit, { SimpleGit } from 'simple-git';
 import { watch } from 'chokidar';
 import { createApiClient } from '../store';
-import { TeamConnection } from '@teamctx/shared';
 
 export interface WatchedRepo {
   id: string;

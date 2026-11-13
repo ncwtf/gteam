@@ -1,10 +1,10 @@
-# teamctx 架构文档
+# gteam (God Team) 架构文档
 
 ## 核心设计理念
 
 ### 去中心化 + Discord 风格多团队
 
-teamctx 采用**去中心化架构**，每个团队自托管独立的服务器，没有中心化 SaaS。桌面客户端采用 **Discord 风格**，可同时连接和切换多个团队。
+gteam (God Team) 采用**去中心化架构**，每个团队自托管独立的服务器，没有中心化 SaaS。桌面客户端采用 **Discord 风格**，可同时连接和切换多个团队。
 
 ### 设计目标
 
@@ -116,7 +116,7 @@ interface TeamData {
    - 获取 token 后添加连接
 
 2. **使用邀请链接**
-   - `teamctx://team.example.com?invite=abc123`
+   - `gteam://team.example.com?invite=abc123`
    - 或 `https://team.example.com/invite/abc123`
    - 自动注册并加入团队
 

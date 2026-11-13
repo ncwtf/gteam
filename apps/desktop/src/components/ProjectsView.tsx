@@ -25,7 +25,6 @@ function ProjectsView() {
           <div
             key={project.id}
             className="card"
-            onClick={() => setCurrentProject(project)}
             style={{ cursor: 'pointer' }}
           >
             <div className="card-title">{project.name}</div>

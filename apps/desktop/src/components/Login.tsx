@@ -1,4 +1,3 @@
-import { useState } from 'react';
 
 interface LoginProps {
   onAddTeam: () => void;
@@ -8,7 +7,7 @@ function Login({ onAddTeam }: LoginProps) {
   return (
     <div className="login-container">
       <div className="login-box">
-        <h1 className="login-title">teamctx</h1>
+        <h1 className="login-title">gteam</h1>
         <p style={{ 
           textAlign: 'center', 
           color: 'var(--text-secondary)', 
@@ -40,7 +39,7 @@ function Login({ onAddTeam }: LoginProps) {
           <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.8' }}>
             <li>每个团队自托管独立的服务器</li>
             <li>可同时连接多个团队（Discord 风格）</li>
-            <li>支持邀请链接和 teamctx:// 深链接</li>
+            <li>支持邀请链接和 gteam:// 深链接</li>
             <li>数据在本地按团队隔离</li>
           </ul>
         </div>

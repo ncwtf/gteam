@@ -1,5 +1,5 @@
 import { query } from './db';
-import { DocumentPartition } from '@teamctx/shared';
+import { DocumentPartition } from '@gteam/shared';
 
 /**
  * 权限检查系统

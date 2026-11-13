@@ -1,7 +1,7 @@
 import { Pool } from 'pg';
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://teamctx:teamctx@localhost:5432/teamctx'
+  connectionString: process.env.DATABASE_URL || 'postgresql://gteam:gteam@localhost:5432/gteam'
 });
 
 export const query = async (text: string, params?: any[]) => {

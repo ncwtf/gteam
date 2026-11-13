@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useStore } from '../store';
-import { WSEventType } from '@teamctx/shared';
+import { WSEventType } from '@gteam/shared';
 
 function FloatingWindow() {
   const [isMinimized, setIsMinimized] = useState(false);

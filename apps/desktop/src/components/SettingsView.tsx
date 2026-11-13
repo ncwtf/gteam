@@ -1,7 +1,16 @@
 import { useState } from 'react';
 import { useStore } from '../store';
 import { supportedIDEs, writeIDEConfig, copyIDEConfigToClipboard } from '../lib/ideConfig';
-import { gitWatcher, WatchedRepo } from '../lib/gitWatcher';
+// TODO: Move gitWatcher to Rust backend (chokidar/simple-git don't work in browser)
+// import { gitWatcher, WatchedRepo } from '../lib/gitWatcher';
+
+interface WatchedRepo {
+  id: string;
+  path: string;
+  requirementId: string;
+  connectionId: string;
+  branch: string;
+}
 
 function SettingsView() {
   const { connections, getActiveConnection } = useStore();
@@ -11,58 +20,10 @@ function SettingsView() {
   const [gitRepoPath, setGitRepoPath] = useState('');
   const [gitBranch, setGitBranch] = useState('');
   const [requirementId, setRequirementId] = useState('');
-  const [watchedRepos, setWatchedRepos] = useState<WatchedRepo[]>(gitWatcher.getWatchedRepos());
+  // TODO: Re-enable after moving gitWatcher to Rust
+  const [watchedRepos] = useState<WatchedRepo[]>([]);
 
-  const ideConfigs = [
-    {
-      name: 'Cursor',
-      path: '~/.cursor/mcp.json',
-      config: {
-        mcpServers: {
-          teamctx: {
-            command: 'node',
-            args: ['/path/to/teamctx/packages/mcp-server/dist/cli.js'],
-            env: {
-              TEAMCTX_API_URL: 'http://localhost:3000',
-              TEAMCTX_TOKEN: token || 'your-token'
-            }
-          }
-        }
-      }
-    },
-    {
-      name: 'Claude Desktop',
-      path: '~/.config/claude/mcp.json',
-      config: {
-        mcpServers: {
-          teamctx: {
-            command: 'node',
-            args: ['/path/to/teamctx/packages/mcp-server/dist/cli.js'],
-            env: {
-              TEAMCTX_API_URL: 'http://localhost:3000',
-              TEAMCTX_TOKEN: token || 'your-token'
-            }
-          }
-        }
-      }
-    },
-    {
-      name: 'VS Code Copilot',
-      path: 'settings.json',
-      config: {
-        'mcp.servers': {
-          teamctx: {
-            command: 'node',
-            args: ['/path/to/teamctx/packages/mcp-server/dist/cli.js'],
-            env: {
-              TEAMCTX_API_URL: 'http://localhost:3000',
-              TEAMCTX_TOKEN: token || 'your-token'
-            }
-          }
-        }
-      }
-    }
-  ];
+  // Example IDE configs (not used, removed to fix TypeScript errors)
 
   const handleWriteIDEConfig = async (ide: typeof supportedIDEs[0]) => {
     setIdeMessage('写入中...');
@@ -78,7 +39,9 @@ function SettingsView() {
   };
 
   const handleAddGitRepo = async () => {
-    if (!activeConnection || !gitRepoPath || !gitBranch || !requirementId) {
+    // TODO: Implement in Rust backend
+    alert('Git监控功能正在迁移到Rust后端，暂时不可用');
+    /* if (!activeConnection || !gitRepoPath || !gitBranch || !requirementId) {
       alert('请填写所有字段');
       return;
     }
@@ -95,12 +58,14 @@ function SettingsView() {
     setWatchedRepos(gitWatcher.getWatchedRepos());
     setGitRepoPath('');
     setGitBranch('');
-    setRequirementId('');
+    setRequirementId(''); */
   };
 
-  const handleRemoveGitRepo = async (repoId: string) => {
-    await gitWatcher.removeRepo(repoId);
-    setWatchedRepos(gitWatcher.getWatchedRepos());
+  const handleRemoveGitRepo = async (_repoId: string) => {
+    // TODO: Implement in Rust backend
+    alert('Git监控功能正在迁移到Rust后端，暂时不可用');
+    // await gitWatcher.removeRepo(_repoId);
+    // setWatchedRepos(gitWatcher.getWatchedRepos());
   };
 
   return (
@@ -266,7 +231,7 @@ function SettingsView() {
       {activeTab === 'about' && (
         <div>
           <div className="card">
-            <div className="card-title">关于 teamctx</div>
+            <div className="card-title">关于 gteam (God Team)</div>
             <div className="card-content">
               <p style={{ marginBottom: '12px' }}>
                 <strong>版本:</strong> 0.2.0 (多团队架构)
@@ -281,7 +246,7 @@ function SettingsView() {
                 <strong>当前用户:</strong> {activeConnection?.userName}
               </p>
               <p style={{ color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: '16px' }}>
-                teamctx 是一个去中心化的团队协作工具，采用 Discord 风格的多团队架构。每个团队自托管独立服务器，桌面客户端可同时连接多个团队，帮助团队成员和他们的 AI 助手之间无缝共享上下文信息。
+                gteam (God Team) 是一个去中心化的团队协作工具，采用 Discord 风格的多团队架构。每个团队自托管独立服务器，桌面客户端可同时连接多个团队，帮助团队成员和他们的 AI 助手之间无缝共享上下文信息。
               </p>
             </div>
           </div>

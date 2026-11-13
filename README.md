@@ -15,7 +15,7 @@ teamctx 帮助团队成员和他们的 AI 助手无缝共享上下文信息，�
 - 🔒 **权限分区** - Personal（个人）/ Shared（只读）/ Collaborative（协作）三层模型
 - 🌿 **Git 监控** - 自动追踪本地代码提交，团队可见工作进度
 - 🖥️ **跨平台桌面应用** - macOS / Windows / Linux，浮动窗口 + 系统托盘
-- 🔗 **深链接支持** - teamctx:// 协议和邀请链接，一键加入团队
+- 🔗 **深链接支持** - gteam:// 协议和邀请链接，一键加入团队
 
 ## 🏗️ 架构
 
@@ -114,7 +114,7 @@ pnpm build
 docker-compose up postgres
 
 # 或手动启动 PostgreSQL
-# 确保创建数据库: teamctx
+# 确保创建数据库: gteam
 ```
 
 #### 2. 启动后端服务
@@ -143,8 +143,8 @@ pnpm dev:desktop
 
 ```bash
 cd packages/mcp-server
-export TEAMCTX_API_URL=http://localhost:3000
-export TEAMCTX_TOKEN=your-jwt-token  # 从登录获取
+export GTEAM_API_URL=http://localhost:3000
+export GTEAM_TOKEN=your-jwt-token  # 从登录获取
 pnpm dev
 ```
 
@@ -175,7 +175,7 @@ pnpm dev
   - `serverUrl`: 团队服务器 URL
   - `token`: 该服务器的 JWT token
   - `teamName`: 团队名称（用于识别）
-- `TEAMCTX_DEFAULT_TEAM`: 默认团队（可选）
+- `GTEAM_DEFAULT_TEAM`: 默认团队（可选）
 
 ### Claude Desktop
 
@@ -257,7 +257,7 @@ curl -X POST https://your-team-server.com/api/auth/create-invite \
   -d '{"maxUses": 10, "expiresInDays": 7}'
 
 # 分享邀请链接给团队成员
-# teamctx://your-team-server.com?invite=abc123xyz
+# gteam://your-team-server.com?invite=abc123xyz
 ```
 
 ### 手动部署

@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2.0",
-  "productName": "teamctx",
+  "productName": "gteam",
   "version": "0.1.0",
-  "identifier": "com.teamctx.app",
+  "identifier": "com.gteam.app",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "beforeBuildCommand": "pnpm build",
@@ -23,7 +23,7 @@
   "app": {
     "windows": [
       {
-        "title": "teamctx",
+        "title": "gteam",
         "width": 1200,
         "height": 800,
         "resizable": true,
@@ -47,7 +47,7 @@
       "all": true
     },
     "fs": {
-      "scope": ["$APPDATA/*", "$HOME/.teamctx/*"]
+      "scope": ["$APPDATA/*", "$HOME/.gteam/*"]
     },
     "dialog": {
       "all": true

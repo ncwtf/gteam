@@ -1,6 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import jwt from 'jsonwebtoken';
-import { WSEvent } from '@teamctx/shared';
+import { WSEvent } from '@gteam/shared';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
 
@@ -35,10 +35,11 @@ export function setupWebSocket(wss: WebSocketServer) {
             );
             
             ws.teamIds = new Set(result.rows.map((row: any) => row.id));
-            clients.set(ws.userId, ws);
-            
-            ws.send(JSON.stringify({ type: 'auth_success', userId: ws.userId }));
-            console.log(`用户 ${ws.userId} 已认证`);
+            if (ws.userId) {
+              clients.set(ws.userId, ws);
+              ws.send(JSON.stringify({ type: 'auth_success', userId: ws.userId }));
+              console.log(`用户 ${ws.userId} 已认证`);
+            }
           } catch (error) {
             ws.send(JSON.stringify({ type: 'auth_error', error: '认证失败' }));
             ws.close();

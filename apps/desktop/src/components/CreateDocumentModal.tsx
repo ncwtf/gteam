@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useStore, createApiClient } from '../store';
-import { DocumentPartition, MemberRole } from '@teamctx/shared';
+import { DocumentPartition, MemberRole } from '@gteam/shared';
 
 interface CreateDocumentModalProps {
   projectId: string;

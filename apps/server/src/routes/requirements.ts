@@ -3,7 +3,7 @@ import { query } from '../db';
 import { authenticateToken } from './auth';
 import { PermissionChecker } from '../permissions';
 import { broadcastEvent } from '../websocket';
-import { WSEventType } from '@teamctx/shared';
+import { WSEventType } from '@gteam/shared';
 
 const router = Router();
 

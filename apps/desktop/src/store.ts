@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import axios, { AxiosInstance } from 'axios';
 import {
-  User,
   Project,
   Document,
   Requirement,
@@ -10,7 +9,7 @@ import {
   WSEvent,
   WSEventType,
   TeamConnection
-} from '@teamctx/shared';
+} from '@gteam/shared';
 
 interface TeamData {
   projects: Project[];
@@ -238,8 +237,8 @@ export const useStore = create<AppState>()(
             // 发送系统通知
             if (wsEvent.type === WSEventType.IssueCreated) {
               const issue = wsEvent.payload as Issue;
-              if (window.__TAURI__?.notification) {
-                window.__TAURI__.notification.sendNotification({
+              if ((window as any).__TAURI__?.notification) {
+                (window as any).__TAURI__.notification.sendNotification({
                   title: `[${connection.teamName}] 新问题`,
                   body: issue.title
                 });
@@ -319,7 +318,7 @@ export const useStore = create<AppState>()(
       }
     }),
     {
-      name: 'teamctx-storage',
+      name: 'gteam-storage',
       partialize: (state) => ({
         connections: state.connections.map((c) => ({
           ...c,

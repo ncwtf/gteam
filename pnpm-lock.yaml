@@ -10,6 +10,12 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@gteam/mcp-server':
+        specifier: workspace:*
+        version: link:../../packages/mcp-server
+      '@gteam/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@tauri-apps/api':
         specifier: ^2.0.0
         version: 2.12.4
@@ -31,12 +37,6 @@ importers:
       '@tauri-apps/plugin-store':
         specifier: ^2.0.0
         version: 2.5.1
-      '@teamctx/mcp-server':
-        specifier: workspace:*
-        version: link:../../packages/mcp-server
-      '@teamctx/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
       axios:
         specifier: ^1.6.5
         version: 1.21.1
@@ -77,7 +77,7 @@ importers:
 
   apps/server:
     dependencies:
-      '@teamctx/shared':
+      '@gteam/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       bcryptjs:
@@ -147,12 +147,12 @@ importers:
 
   packages/mcp-server:
     dependencies:
+      '@gteam/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@modelcontextprotocol/sdk':
         specifier: ^0.5.0
         version: 0.5.0
-      '@teamctx/shared':
-        specifier: workspace:*
-        version: link:../shared
       axios:
         specifier: ^1.6.5
         version: 1.21.1

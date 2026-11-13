@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useStore, createApiClient } from '../store';
-import { DocumentPartition, Project } from '@teamctx/shared';
+import { DocumentPartition } from '@gteam/shared';
 import CreateDocumentModal from './CreateDocumentModal';
 
 function DocumentsView() {
@@ -11,8 +11,6 @@ function DocumentsView() {
   const projects = activeConnectionId ? teamData[activeConnectionId]?.projects || [] : [];
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [partition, setPartition] = useState<DocumentPartition | 'all'>('all');
-
-  const currentProject = projects.find(p => p.id === selectedProjectId);
 
   useEffect(() => {
     if (projects.length > 0 && !selectedProjectId) {

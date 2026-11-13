@@ -6,8 +6,8 @@ import { query } from '../db';
 
 const router = Router();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+const JWT_SECRET: string = process.env.JWT_SECRET || 'dev-secret-change-in-production';
+const JWT_EXPIRES_IN: string = process.env.JWT_EXPIRES_IN || '7d';
 
 // 注册
 router.post('/register', async (req, res) => {
@@ -36,9 +36,11 @@ router.post('/register', async (req, res) => {
     const user = result.rows[0];
 
     // 生成 JWT
-    const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, {
-      expiresIn: JWT_EXPIRES_IN
-    });
+    const token = jwt.sign(
+      { userId: user.id, email: user.email },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions
+    );
 
     res.json({
       success: true,
@@ -74,9 +76,11 @@ router.post('/login', async (req, res) => {
     }
 
     // 生成 JWT
-    const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, {
-      expiresIn: JWT_EXPIRES_IN
-    });
+    const token = jwt.sign(
+      { userId: user.id, email: user.email },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions
+    );
 
     res.json({
       success: true,
@@ -152,7 +156,7 @@ router.post('/create-invite', authenticateToken, async (req, res) => {
 
     // 生成邀请链接
     const serverUrl = process.env.SERVER_URL || 'http://localhost:3000';
-    const inviteUrl = `teamctx://${serverUrl.replace(/^https?:\/\//, '')}?invite=${code}`;
+    const inviteUrl = `gteam://${serverUrl.replace(/^https?:\/\//, '')}?invite=${code}`;
 
     res.json({
       success: true,
@@ -245,9 +249,11 @@ router.post('/join-invite', async (req, res) => {
     const teamName = teamResult.rows[0]?.name || 'Team';
 
     // 生成 JWT
-    const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, {
-      expiresIn: JWT_EXPIRES_IN
-    });
+    const token = jwt.sign(
+      { userId: user.id, email: user.email },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions
+    );
 
     res.json({
       success: true,

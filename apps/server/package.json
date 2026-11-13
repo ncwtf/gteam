@@ -1,5 +1,5 @@
 {
-  "name": "@teamctx/server",
+  "name": "@gteam/server",
   "version": "0.1.0",
   "private": true,
   "main": "./dist/index.js",
@@ -12,7 +12,7 @@
     "db:migrate": "tsx src/db/migrate.ts"
   },
   "dependencies": {
-    "@teamctx/shared": "workspace:*",
+    "@gteam/shared": "workspace:*",
     "express": "^4.18.2",
     "cors": "^2.8.5",
     "ws": "^8.16.0",

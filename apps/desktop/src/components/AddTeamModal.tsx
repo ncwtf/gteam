@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import axios from 'axios';
 import { useStore } from '../store';
-import { TeamConnection } from '@teamctx/shared';
+import { TeamConnection } from '@gteam/shared';
 
 interface AddTeamModalProps {
   onClose: () => void;
@@ -74,8 +74,8 @@ function AddTeamModal({ onClose }: AddTeamModalProps) {
       let parsedServerUrl = serverUrl;
       let parsedInviteCode = inviteCode;
 
-      // 支持 teamctx:// 深链接
-      if (serverUrl.startsWith('teamctx://')) {
+      // 支持 gteam:// 深链接
+      if (serverUrl.startsWith('gteam://')) {
         const url = new URL(serverUrl);
         parsedServerUrl = `https://${url.hostname}${url.port ? ':' + url.port : ''}`;
         parsedInviteCode = url.searchParams.get('invite') || url.pathname.replace('/', '');
@@ -205,11 +205,11 @@ function AddTeamModal({ onClose }: AddTeamModalProps) {
                 type="text"
                 value={serverUrl}
                 onChange={(e) => setServerUrl(e.target.value)}
-                placeholder="teamctx://team.example.com?invite=abc123 或 https://team.example.com"
+                placeholder="gteam://team.example.com?invite=abc123 或 https://team.example.com"
                 required
               />
               <small style={{ color: 'var(--text-secondary)', marginTop: '4px', display: 'block' }}>
-                支持 teamctx:// 深链接
+                支持 gteam:// 深链接
               </small>
             </div>
             

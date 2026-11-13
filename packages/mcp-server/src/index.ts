@@ -11,7 +11,7 @@ import axios, { AxiosInstance } from 'axios';
 import { z } from 'zod';
 
 /**
- * teamctx MCP Server - 多团队支持版本
+ * gteam (God Team) MCP Server - 多团队支持版本
  * 
  * 架构说明:
  * - 支持连接多个团队（每个团队独立服务器）
@@ -31,7 +31,7 @@ interface ServerConfig {
   defaultTeam?: string; // serverUrl 或 teamName
 }
 
-class TeamCtxMCPServer {
+class GteamMCPServer {
   private server: Server;
   private config: ServerConfig;
   private apiClients: Map<string, AxiosInstance> = new Map();
@@ -52,7 +52,7 @@ class TeamCtxMCPServer {
 
     this.server = new Server(
       {
-        name: 'teamctx-multi',
+        name: 'gteam-multi',
         version: '0.2.0'
       },
       {
@@ -564,17 +564,17 @@ class TeamCtxMCPServer {
   async run() {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    console.error('teamctx MCP Server (多团队) 运行中...');
+    console.error('gteam (God Team) MCP Server (多团队) 运行中...');
   }
 }
 
 // 主函数
 export async function main() {
   // 从环境变量读取配置
-  const teamsConfig = process.env.TEAMCTX_TEAMS;
+  const teamsConfig = process.env.GTEAM_TEAMS;
   
   if (!teamsConfig) {
-    console.error('错误: 需要设置 TEAMCTX_TEAMS 环境变量');
+    console.error('错误: 需要设置 GTEAM_TEAMS 环境变量');
     console.error('格式: [{"serverUrl":"https://team1.com","token":"xxx","teamName":"Team1"},...]');
     process.exit(1);
   }
@@ -584,14 +584,14 @@ export async function main() {
     const teams = JSON.parse(teamsConfig);
     config = {
       teams,
-      defaultTeam: process.env.TEAMCTX_DEFAULT_TEAM || teams[0]?.serverUrl
+      defaultTeam: process.env.GTEAM_DEFAULT_TEAM || teams[0]?.serverUrl
     };
   } catch (error) {
-    console.error('错误: TEAMCTX_TEAMS 配置格式不正确');
+    console.error('错误: GTEAM_TEAMS 配置格式不正确');
     process.exit(1);
   }
 
-  const server = new TeamCtxMCPServer(config);
+  const server = new GteamMCPServer(config);
   await server.run();
 }
 

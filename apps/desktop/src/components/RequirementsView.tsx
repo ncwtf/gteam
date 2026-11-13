@@ -71,8 +71,6 @@ function RequirementsView() {
     return colors[status] || '#999';
   };
 
-  const currentProject = projects.find(p => p.id === selectedProjectId);
-
   return (
     <div>
       <div className="header">

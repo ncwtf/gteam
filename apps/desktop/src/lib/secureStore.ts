@@ -9,7 +9,7 @@ let store: Store | null = null;
 
 async function getStore(): Promise<Store> {
   if (!store) {
-    store = await Store.load('teamctx-secure.json', { autoSave: true });
+    store = await Store.load('gteam-secure.json', { autoSave: true });
   }
   return store;
 }

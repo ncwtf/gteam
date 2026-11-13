@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { query } from '../db';
 import { authenticateToken } from './auth';
 import { broadcastEvent } from '../websocket';
-import { WSEventType } from '@teamctx/shared';
+import { WSEventType } from '@gteam/shared';
 
 const router = Router();
 

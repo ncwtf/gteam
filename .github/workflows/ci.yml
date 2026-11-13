@@ -15,9 +15,9 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_DB: teamctx_test
-          POSTGRES_USER: teamctx
-          POSTGRES_PASSWORD: teamctx
+          POSTGRES_DB: gteam_test
+          POSTGRES_USER: gteam
+          POSTGRES_PASSWORD: gteam
         ports:
           - 5432:5432
         options: >-
@@ -48,7 +48,7 @@ jobs:
       - name: Run tests
         run: pnpm test
         env:
-          DATABASE_URL: postgresql://teamctx:teamctx@localhost:5432/teamctx_test
+          DATABASE_URL: postgresql://gteam:gteam@localhost:5432/gteam_test
       
       - name: Type check
         run: pnpm typecheck
@@ -105,6 +105,6 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: teamctx-${{ matrix.platform }}-${{ matrix.target }}
+          name: gteam-${{ matrix.platform }}-${{ matrix.target }}
           path: |
             apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/

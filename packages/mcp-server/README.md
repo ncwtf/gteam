@@ -1,4 +1,4 @@
-# teamctx MCP Server - 多团队版本
+# gteam (God Team) MCP Server - 多团队版本
 
 为 AI IDE 提供团队上下文访问能力的 MCP 服务器，**支持同时连接多个团队**。
 
@@ -22,12 +22,12 @@ MCP 服务器现在支持同时连接多个团队（每个团队独立服务器�
 ```json
 {
   "mcpServers": {
-    "teamctx": {
+    "gteam": {
       "command": "node",
-      "args": ["/path/to/teamctx/packages/mcp-server/dist/cli.js"],
+      "args": ["/path/to/gteam/packages/mcp-server/dist/cli.js"],
       "env": {
-        "TEAMCTX_TEAMS": "[{\"serverUrl\":\"https://team1.com\",\"token\":\"token1\",\"teamName\":\"Team1\"},{\"serverUrl\":\"https://team2.com\",\"token\":\"token2\",\"teamName\":\"Team2\"}]",
-        "TEAMCTX_DEFAULT_TEAM": "Team1"
+        "GTEAM_TEAMS": "[{\"serverUrl\":\"https://team1.com\",\"token\":\"token1\",\"teamName\":\"Team1\"},{\"serverUrl\":\"https://team2.com\",\"token\":\"token2\",\"teamName\":\"Team2\"}]",
+        "GTEAM_DEFAULT_TEAM": "Team1"
       }
     }
   }
@@ -36,12 +36,12 @@ MCP 服务器现在支持同时连接多个团队（每个团队独立服务器�
 
 #### 配置说明
 
-- `TEAMCTX_TEAMS`: JSON 数组，包含所有团队配置
+- `GTEAM_TEAMS`: JSON 数组，包含所有团队配置
   - `serverUrl`: 团队服务器 URL
   - `token`: 该服务器的 JWT token
   - `teamName`: 团队名称（可选，用于识别）
   
-- `TEAMCTX_DEFAULT_TEAM`: 默认团队（可选，serverUrl 或 teamName）
+- `GTEAM_DEFAULT_TEAM`: 默认团队（可选，serverUrl 或 teamName）
 
 ### Claude Desktop 配置
 

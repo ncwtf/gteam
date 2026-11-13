@@ -1,8 +1,8 @@
 [package]
-name = "teamctx"
+name = "gteam"
 version = "0.1.0"
-description = "AI-first team context hub"
-authors = ["teamctx"]
+description = "gteam (God Team): AI-first team context hub"
+authors = ["gteam"]
 edition = "2021"
 
 [build-dependencies]
