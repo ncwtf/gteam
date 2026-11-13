@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useStore, createApiClient } from '../store';
+import CreateIssueModal from './CreateIssueModal';
 
 function IssuesView() {
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const { getActiveConnection, teamData, activeConnectionId, setIssues } = useStore();
   const activeConnection = getActiveConnection();
   const projects = activeConnectionId ? teamData[activeConnectionId]?.projects || [] : [];
@@ -53,6 +55,7 @@ function IssuesView() {
     <div>
       <div className="header">
         <h1>问题</h1>
+        <button className="btn" onClick={() => setShowCreateModal(true)}>新建问题</button>
       </div>
       
       <div style={{ marginBottom: '16px' }}>
@@ -123,6 +126,14 @@ function IssuesView() {
             </div>
           </div>
         ))
+      )}
+
+      {showCreateModal && selectedProjectId && (
+        <CreateIssueModal
+          projectId={selectedProjectId}
+          onClose={() => setShowCreateModal(false)}
+          onSuccess={loadIssues}
+        />
       )}
     </div>
   );

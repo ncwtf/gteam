@@ -42,6 +42,15 @@
     "shell": {
       "all": false,
       "open": true
+    },
+    "store": {
+      "all": true
+    },
+    "fs": {
+      "scope": ["$APPDATA/*", "$HOME/.teamctx/*"]
+    },
+    "dialog": {
+      "all": true
     }
   }
 }

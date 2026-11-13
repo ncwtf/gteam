@@ -156,6 +156,20 @@ export const initDatabase = async () => {
       );
     `);
 
+    // Invites table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS invites (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        team_id UUID REFERENCES teams(id) ON DELETE CASCADE,
+        code VARCHAR(100) UNIQUE NOT NULL,
+        created_by UUID REFERENCES users(id) ON DELETE CASCADE,
+        expires_at TIMESTAMP,
+        max_uses INTEGER,
+        current_uses INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     // Create indexes for better performance
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_documents_project_id ON documents(project_id);
@@ -166,6 +180,8 @@ export const initDatabase = async () => {
       CREATE INDEX IF NOT EXISTS idx_git_progress_requirement_id ON git_progress(requirement_id);
       CREATE INDEX IF NOT EXISTS idx_issues_project_id ON issues(project_id);
       CREATE INDEX IF NOT EXISTS idx_issues_created_by ON issues(created_by);
+      CREATE INDEX IF NOT EXISTS idx_invites_code ON invites(code);
+      CREATE INDEX IF NOT EXISTS idx_invites_team_id ON invites(team_id);
     `);
 
     await client.query('COMMIT');

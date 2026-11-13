@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useStore, createApiClient } from '../store';
 import { DocumentPartition, Project } from '@teamctx/shared';
+import CreateDocumentModal from './CreateDocumentModal';
 
 function DocumentsView() {
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const { getActiveConnection, teamData, activeConnectionId, setDocuments } = useStore();
   const activeConnection = getActiveConnection();
   const documents = activeConnectionId ? teamData[activeConnectionId]?.documents || [] : [];
@@ -61,7 +63,7 @@ function DocumentsView() {
     <div>
       <div className="header">
         <h1>文档</h1>
-        <button className="btn">新建文档</button>
+        <button className="btn" onClick={() => setShowCreateModal(true)}>新建文档</button>
       </div>
       
       <div style={{ marginBottom: '16px', display: 'flex', gap: '12px' }}>
@@ -122,6 +124,14 @@ function DocumentsView() {
             </div>
           </div>
         ))
+      )}
+
+      {showCreateModal && selectedProjectId && (
+        <CreateDocumentModal
+          projectId={selectedProjectId}
+          onClose={() => setShowCreateModal(false)}
+          onSuccess={loadDocuments}
+        />
       )}
     </div>
   );

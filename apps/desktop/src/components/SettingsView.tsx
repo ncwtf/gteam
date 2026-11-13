@@ -1,9 +1,17 @@
 import { useState } from 'react';
 import { useStore } from '../store';
+import { supportedIDEs, writeIDEConfig, copyIDEConfigToClipboard } from '../lib/ideConfig';
+import { gitWatcher, WatchedRepo } from '../lib/gitWatcher';
 
 function SettingsView() {
-  const { user, token } = useStore();
+  const { connections, getActiveConnection } = useStore();
+  const activeConnection = getActiveConnection();
   const [activeTab, setActiveTab] = useState<'ide' | 'git' | 'about'>('ide');
+  const [ideMessage, setIdeMessage] = useState('');
+  const [gitRepoPath, setGitRepoPath] = useState('');
+  const [gitBranch, setGitBranch] = useState('');
+  const [requirementId, setRequirementId] = useState('');
+  const [watchedRepos, setWatchedRepos] = useState<WatchedRepo[]>(gitWatcher.getWatchedRepos());
 
   const ideConfigs = [
     {
@@ -56,9 +64,43 @@ function SettingsView() {
     }
   ];
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    alert('已复制到剪贴板');
+  const handleWriteIDEConfig = async (ide: typeof supportedIDEs[0]) => {
+    setIdeMessage('写入中...');
+    const result = await writeIDEConfig(ide, connections);
+    setIdeMessage(result.message);
+    setTimeout(() => setIdeMessage(''), 5000);
+  };
+
+  const handleCopyIDEConfig = async (ide: typeof supportedIDEs[0]) => {
+    await copyIDEConfigToClipboard(ide, connections);
+    setIdeMessage(`${ide.name} 配置已复制到剪贴板`);
+    setTimeout(() => setIdeMessage(''), 3000);
+  };
+
+  const handleAddGitRepo = async () => {
+    if (!activeConnection || !gitRepoPath || !gitBranch || !requirementId) {
+      alert('请填写所有字段');
+      return;
+    }
+
+    const repo: WatchedRepo = {
+      id: `${activeConnection.id}-${gitRepoPath}`,
+      path: gitRepoPath,
+      requirementId,
+      connectionId: activeConnection.id,
+      branch: gitBranch
+    };
+
+    await gitWatcher.addRepo(repo);
+    setWatchedRepos(gitWatcher.getWatchedRepos());
+    setGitRepoPath('');
+    setGitBranch('');
+    setRequirementId('');
+  };
+
+  const handleRemoveGitRepo = async (repoId: string) => {
+    await gitWatcher.removeRepo(repoId);
+    setWatchedRepos(gitWatcher.getWatchedRepos());
   };
 
   return (
@@ -90,43 +132,48 @@ function SettingsView() {
 
       {activeTab === 'ide' && (
         <div>
+          {ideMessage && (
+            <div className="card" style={{ backgroundColor: '#e6f4ea', borderColor: '#00aa00', marginBottom: '16px' }}>
+              {ideMessage}
+            </div>
+          )}
+
           <div className="card">
             <div className="card-title">🔌 IDE MCP 配置</div>
             <div className="card-content" style={{ marginBottom: '16px' }}>
-              选择你使用的 IDE，复制配置并添加到对应的配置文件中。
+              一键配置或复制配置到你使用的 IDE。当前已连接 {connections.length} 个团队。
             </div>
             
-            {ideConfigs.map((ide) => (
-              <div key={ide.name} style={{ marginBottom: '24px' }}>
-                <h3 style={{ marginBottom: '8px', fontSize: '16px', fontWeight: 600 }}>
-                  {ide.name}
-                </h3>
-                <div style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                  配置文件: <code>{ide.path}</code>
-                </div>
-                <div style={{
-                  position: 'relative',
-                  backgroundColor: '#f5f5f5',
-                  padding: '12px',
-                  borderRadius: '6px',
-                  fontFamily: 'monospace',
-                  fontSize: '12px',
-                  overflow: 'auto'
-                }}>
-                  <pre style={{ margin: 0 }}>{JSON.stringify(ide.config, null, 2)}</pre>
-                  <button
-                    onClick={() => copyToClipboard(JSON.stringify(ide.config, null, 2))}
-                    style={{
-                      position: 'absolute',
-                      top: '8px',
-                      right: '8px',
-                      padding: '4px 8px',
-                      fontSize: '12px'
-                    }}
-                    className="btn btn-secondary"
-                  >
-                    复制
-                  </button>
+            {supportedIDEs.map((ide) => (
+              <div key={ide.name} style={{ marginBottom: '24px', padding: '16px', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '8px' }}>
+                  <div>
+                    <h3 style={{ marginBottom: '4px', fontSize: '16px', fontWeight: 600 }}>
+                      {ide.name}
+                    </h3>
+                    <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
+                      {ide.description}
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                      配置文件: <code style={{ backgroundColor: 'white', padding: '2px 6px', borderRadius: '4px' }}>{ide.configPath}</code>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      onClick={() => handleWriteIDEConfig(ide)}
+                      className="btn"
+                      style={{ fontSize: '14px', padding: '8px 16px' }}
+                    >
+                      一键配置
+                    </button>
+                    <button
+                      onClick={() => handleCopyIDEConfig(ide)}
+                      className="btn btn-secondary"
+                      style={{ fontSize: '14px', padding: '8px 16px' }}
+                    >
+                      复制配置
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -142,18 +189,75 @@ function SettingsView() {
               Git 监控会自动追踪你的本地代码仓库变化，并将提交记录同步到团队。
               <div style={{ marginTop: '16px' }}>
                 <div className="form-group">
-                  <label>监控的仓库路径</label>
-                  <input type="text" placeholder="/path/to/your/repo" />
+                  <label>仓库路径 *</label>
+                  <input 
+                    type="text" 
+                    placeholder="/path/to/your/repo" 
+                    value={gitRepoPath}
+                    onChange={(e) => setGitRepoPath(e.target.value)}
+                  />
                 </div>
-                <button className="btn">添加仓库</button>
+                <div className="form-group">
+                  <label>Git 分支 *</label>
+                  <input 
+                    type="text" 
+                    placeholder="feature/my-feature" 
+                    value={gitBranch}
+                    onChange={(e) => setGitBranch(e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>关联需求 ID *</label>
+                  <input 
+                    type="text" 
+                    placeholder="需求 ID" 
+                    value={requirementId}
+                    onChange={(e) => setRequirementId(e.target.value)}
+                  />
+                  <small style={{ color: 'var(--text-secondary)', marginTop: '4px', display: 'block' }}>
+                    该仓库的提交将关联到此需求
+                  </small>
+                </div>
+                <button className="btn" onClick={handleAddGitRepo}>添加仓库</button>
               </div>
             </div>
           </div>
           
           <div className="card">
-            <div className="card-title">当前监控的仓库</div>
+            <div className="card-title">当前监控的仓库 ({watchedRepos.length})</div>
             <div className="card-content">
-              <p style={{ color: 'var(--text-secondary)' }}>暂无监控的仓库</p>
+              {watchedRepos.length === 0 ? (
+                <p style={{ color: 'var(--text-secondary)' }}>暂无监控的仓库</p>
+              ) : (
+                watchedRepos.map((repo) => {
+                  const connection = connections.find(c => c.id === repo.connectionId);
+                  return (
+                    <div key={repo.id} style={{ 
+                      padding: '12px', 
+                      backgroundColor: 'var(--bg-secondary)', 
+                      borderRadius: '6px', 
+                      marginBottom: '8px',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}>
+                      <div>
+                        <div style={{ fontWeight: 500 }}>{repo.path}</div>
+                        <div style={{ fontSize: '14px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                          分支: {repo.branch} | 团队: {connection?.teamName} | 需求: {repo.requirementId}
+                        </div>
+                      </div>
+                      <button 
+                        className="btn btn-secondary" 
+                        onClick={() => handleRemoveGitRepo(repo.id)}
+                        style={{ fontSize: '14px', padding: '6px 12px' }}
+                      >
+                        移除
+                      </button>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>
@@ -165,23 +269,19 @@ function SettingsView() {
             <div className="card-title">关于 teamctx</div>
             <div className="card-content">
               <p style={{ marginBottom: '12px' }}>
-                <strong>版本:</strong> 0.1.0 MVP
+                <strong>版本:</strong> 0.2.0 (多团队架构)
               </p>
               <p style={{ marginBottom: '12px' }}>
-                <strong>当前用户:</strong> {user?.name} ({user?.email})
+                <strong>已连接团队:</strong> {connections.length} 个
               </p>
               <p style={{ marginBottom: '12px' }}>
-                <strong>Token:</strong> <code style={{
-                  fontSize: '12px',
-                  backgroundColor: 'var(--bg-secondary)',
-                  padding: '2px 6px',
-                  borderRadius: '4px'
-                }}>
-                  {token?.substring(0, 20)}...
-                </code>
+                <strong>当前团队:</strong> {activeConnection?.teamName}
               </p>
-              <p style={{ color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                teamctx 是一个面向 AI 时代的团队协作工具，帮助团队成员和他们的 AI 助手之间无缝共享上下文信息。
+              <p style={{ marginBottom: '12px' }}>
+                <strong>当前用户:</strong> {activeConnection?.userName}
+              </p>
+              <p style={{ color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: '16px' }}>
+                teamctx 是一个去中心化的团队协作工具，采用 Discord 风格的多团队架构。每个团队自托管独立服务器，桌面客户端可同时连接多个团队，帮助团队成员和他们的 AI 助手之间无缝共享上下文信息。
               </p>
             </div>
           </div>

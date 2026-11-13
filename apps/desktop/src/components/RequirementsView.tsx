@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useStore, createApiClient } from '../store';
+import CreateRequirementModal from './CreateRequirementModal';
 
 function RequirementsView() {
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const { getActiveConnection, teamData, activeConnectionId, setRequirements } = useStore();
   const activeConnection = getActiveConnection();
   const projects = activeConnectionId ? teamData[activeConnectionId]?.projects || [] : [];
@@ -75,7 +77,7 @@ function RequirementsView() {
     <div>
       <div className="header">
         <h1>需求</h1>
-        <button className="btn">新建需求</button>
+        <button className="btn" onClick={() => setShowCreateModal(true)}>新建需求</button>
       </div>
       
       <div style={{ marginBottom: '16px' }}>
@@ -124,6 +126,14 @@ function RequirementsView() {
             </div>
           </div>
         ))
+      )}
+
+      {showCreateModal && selectedProjectId && (
+        <CreateRequirementModal
+          projectId={selectedProjectId}
+          onClose={() => setShowCreateModal(false)}
+          onSuccess={loadRequirements}
+        />
       )}
     </div>
   );

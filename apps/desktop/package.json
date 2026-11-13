@@ -17,10 +17,15 @@
     "@tauri-apps/plugin-notification": "^2.0.0",
     "@tauri-apps/plugin-os": "^2.0.0",
     "@tauri-apps/plugin-shell": "^2.0.0",
+    "@tauri-apps/plugin-store": "^2.0.0",
+    "@tauri-apps/plugin-fs": "^2.0.0",
+    "@tauri-apps/plugin-dialog": "^2.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "axios": "^1.6.5",
-    "zustand": "^4.4.7"
+    "zustand": "^4.4.7",
+    "simple-git": "^3.21.0",
+    "chokidar": "^3.5.3"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",
