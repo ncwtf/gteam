@@ -27,30 +27,12 @@
         "width": 1200,
         "height": 800,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "label": "main"
       }
     ],
     "security": {
       "csp": null
-    }
-  },
-  "plugins": {
-    "notification": {
-      "all": true,
-      "show": true
-    },
-    "shell": {
-      "all": false,
-      "open": true
-    },
-    "store": {
-      "all": true
-    },
-    "fs": {
-      "scope": ["$APPDATA/*", "$HOME/.gteam/*"]
-    },
-    "dialog": {
-      "all": true
     }
   }
 }
