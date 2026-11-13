@@ -15,10 +15,12 @@ import UpdateBanner from './components/UpdateBanner';
 import ErrorBanner from './components/ErrorBanner';
 import { reloadProjects } from './lib/teamData';
 import { isTauri, restoreToken } from './lib/session';
+import { useGitProgressSync } from './lib/gitSync';
 
 type View = 'projects' | 'documents' | 'requirements' | 'issues' | 'settings';
 
 function App() {
+  useGitProgressSync();
   const {
     connections,
     activeConnectionId,

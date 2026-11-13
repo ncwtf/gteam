@@ -1,11 +1,11 @@
 // Prevents additional console window on Windows in release
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod git_monitor;
 mod git_watcher;
 mod keyring_store;
 
 use tauri::Manager;
-use std::sync::Mutex;
 
 fn main() {
     tauri::Builder::default()
@@ -17,17 +17,23 @@ fn main() {
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .manage(Mutex::new(git_watcher::GitWatcher::new()))
+        .manage(git_watcher::GitWatcher::new())
         .invoke_handler(tauri::generate_handler![
-            git_watcher::start_watching_repo,
-            git_watcher::stop_watching_repo,
-            git_watcher::get_current_git_status,
+            git_watcher::list_git_monitors,
+            git_watcher::inspect_git_source,
+            git_watcher::add_git_monitor,
+            git_watcher::update_git_monitor,
+            git_watcher::remove_git_monitor,
+            git_watcher::pending_git_progress,
+            git_watcher::ack_git_progress,
+            git_watcher::set_git_sync_error,
             keyring_store::store_team_token,
             keyring_store::get_team_token,
             keyring_store::delete_team_token,
             keyring_store::list_stored_teams,
         ])
         .setup(|app| {
+            git_watcher::restore(app.handle())?;
             #[cfg(desktop)]
             {
                 use tauri::image::Image;
@@ -42,22 +48,23 @@ fn main() {
                 let tray_icon = Image::from_bytes(include_bytes!("../icons/tray-white-32.png"))
                     .expect("Failed to load tray icon");
 
-                let mut tray_builder = TrayIconBuilder::new().icon(tray_icon).on_tray_icon_event(
-                    |tray, event| {
-                        if let tauri::tray::TrayIconEvent::Click {
-                            button: MouseButton::Left,
-                            button_state: MouseButtonState::Up,
-                            ..
-                        } = event
-                        {
-                            let app = tray.app_handle();
-                            if let Some(window) = app.get_webview_window("main") {
-                                let _ = window.show();
-                                let _ = window.set_focus();
+                let mut tray_builder =
+                    TrayIconBuilder::new()
+                        .icon(tray_icon)
+                        .on_tray_icon_event(|tray, event| {
+                            if let tauri::tray::TrayIconEvent::Click {
+                                button: MouseButton::Left,
+                                button_state: MouseButtonState::Up,
+                                ..
+                            } = event
+                            {
+                                let app = tray.app_handle();
+                                if let Some(window) = app.get_webview_window("main") {
+                                    let _ = window.show();
+                                    let _ = window.set_focus();
+                                }
                             }
-                        }
-                    },
-                );
+                        });
 
                 #[cfg(target_os = "macos")]
                 {

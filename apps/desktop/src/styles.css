@@ -252,6 +252,11 @@ body {
   color: var(--text-primary);
 }
 
+.form-group input[type='checkbox'] {
+  width: auto;
+  margin: 0;
+}
+
 .form-group input,
 .form-group textarea,
 .form-group select {
