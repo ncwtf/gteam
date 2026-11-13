@@ -25,28 +25,22 @@ fn main() {
             keyring_store::list_stored_teams,
         ])
         .setup(|app| {
-            // 设置系统托盘
             #[cfg(desktop)]
             {
-                use tauri::tray::{TrayIconBuilder, MouseButton, MouseButtonState};
                 use tauri::image::Image;
-                
-                // 使用 template 图标（macOS 推荐），其他平台使用黑色图标
+                use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder};
+
+                // macOS menu bar uses a template image (black pixels + alpha).
+                // Other platforms use the white glyph on a dark tray.
                 #[cfg(target_os = "macos")]
-                let tray_icon = {
-                    let icon_bytes = include_bytes!("../icons/tray-black-32.png");
-                    Image::from_bytes(icon_bytes).expect("Failed to load tray icon")
-                };
-                
+                let tray_icon = Image::from_bytes(include_bytes!("../icons/tray-black-32.png"))
+                    .expect("Failed to load tray icon");
                 #[cfg(not(target_os = "macos"))]
-                let tray_icon = {
-                    let icon_bytes = include_bytes!("../icons/tray-white-32.png");
-                    Image::from_bytes(icon_bytes).expect("Failed to load tray icon")
-                };
-                
-                let mut tray_builder = TrayIconBuilder::new()
-                    .icon(tray_icon)
-                    .on_tray_icon_event(|tray, event| {
+                let tray_icon = Image::from_bytes(include_bytes!("../icons/tray-white-32.png"))
+                    .expect("Failed to load tray icon");
+
+                let mut tray_builder = TrayIconBuilder::new().icon(tray_icon).on_tray_icon_event(
+                    |tray, event| {
                         if let tauri::tray::TrayIconEvent::Click {
                             button: MouseButton::Left,
                             button_state: MouseButtonState::Up,
@@ -59,17 +53,17 @@ fn main() {
                                 let _ = window.set_focus();
                             }
                         }
-                    });
-                
-                // macOS 使用 template 模式
+                    },
+                );
+
                 #[cfg(target_os = "macos")]
                 {
                     tray_builder = tray_builder.icon_as_template(true);
                 }
-                
+
                 let _tray = tray_builder.build(app)?;
             }
-            
+
             Ok(())
         })
         .run(tauri::generate_context!())
