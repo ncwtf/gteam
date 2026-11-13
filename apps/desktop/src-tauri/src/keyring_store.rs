@@ -40,7 +40,7 @@ pub fn delete_team_token(server_url: String) -> Result<(), String> {
         .map_err(|e| format!("Failed to create keyring entry: {}", e))?;
     
     entry
-        .delete_credential()
+        .delete_password()
         .map_err(|e| format!("Failed to delete token: {}", e))?;
     
     Ok(())

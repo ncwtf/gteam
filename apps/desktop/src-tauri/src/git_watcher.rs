@@ -73,13 +73,20 @@ impl GitWatcher {
         let head = repo.head().ok()?;
         let commit = head.peel_to_commit().ok()?;
         
+        // 提前提取所有需要的数据，避免生命周期问题
+        let branch_name = head.shorthand().unwrap_or("unknown").to_string();
+        let commit_hash = commit.id().to_string();
+        let commit_message = commit.message().unwrap_or("").to_string();
+        let author_name = commit.author().name().unwrap_or("unknown").to_string();
+        let timestamp = commit.time().seconds();
+        
         Some(GitProgressEvent {
             repo_path: repo_path.to_string(),
-            branch: head.shorthand().unwrap_or("unknown").to_string(),
-            commit_hash: commit.id().to_string(),
-            commit_message: commit.message().unwrap_or("").to_string(),
-            author: commit.author().name().unwrap_or("unknown").to_string(),
-            timestamp: commit.time().seconds(),
+            branch: branch_name,
+            commit_hash,
+            commit_message,
+            author: author_name,
+            timestamp,
         })
     }
 }

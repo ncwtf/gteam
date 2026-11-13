@@ -25,14 +25,22 @@ fn main() {
             keyring_store::list_stored_teams,
         ])
         .setup(|app| {
-            // 设置系统托盘
             #[cfg(desktop)]
             {
-                use tauri::tray::{TrayIconBuilder, MouseButton, MouseButtonState};
-                
-                let tray = TrayIconBuilder::new()
-                    .icon(app.default_window_icon().unwrap().clone())
-                    .on_tray_icon_event(|tray, event| {
+                use tauri::image::Image;
+                use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder};
+
+                // macOS menu bar uses a template image (black pixels + alpha).
+                // Other platforms use the white glyph on a dark tray.
+                #[cfg(target_os = "macos")]
+                let tray_icon = Image::from_bytes(include_bytes!("../icons/tray-black-32.png"))
+                    .expect("Failed to load tray icon");
+                #[cfg(not(target_os = "macos"))]
+                let tray_icon = Image::from_bytes(include_bytes!("../icons/tray-white-32.png"))
+                    .expect("Failed to load tray icon");
+
+                let mut tray_builder = TrayIconBuilder::new().icon(tray_icon).on_tray_icon_event(
+                    |tray, event| {
                         if let tauri::tray::TrayIconEvent::Click {
                             button: MouseButton::Left,
                             button_state: MouseButtonState::Up,
@@ -45,10 +53,17 @@ fn main() {
                                 let _ = window.set_focus();
                             }
                         }
-                    })
-                    .build(app)?;
+                    },
+                );
+
+                #[cfg(target_os = "macos")]
+                {
+                    tray_builder = tray_builder.icon_as_template(true);
+                }
+
+                let _tray = tray_builder.build(app)?;
             }
-            
+
             Ok(())
         })
         .run(tauri::generate_context!())

@@ -15,7 +15,16 @@ function Sidebar({ currentView, onViewChange }: SidebarProps) {
 
   return (
     <aside className="sidebar">
-      <div className="sidebar-header">{activeConnection.teamName}</div>
+      <div className="sidebar-header" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <img 
+          src="/icon.svg" 
+          alt="gteam" 
+          style={{ width: '24px', height: '24px', flexShrink: 0 }}
+        />
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {activeConnection.teamName}
+        </span>
+      </div>
       
       <nav>
         <a

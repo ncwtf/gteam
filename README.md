@@ -1,3 +1,9 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="brand/svg/lockup-horizontal-on-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="brand/svg/lockup-horizontal-on-light.svg">
+  <img alt="gteam" src="brand/svg/lockup-horizontal-on-dark.svg" width="300">
+</picture>
+
 # gteam (God Team)
 
 **AI 时代的去中心化团队协作工具** - 跨平台桌面应用 + 自托管服务 + MCP 服务器
