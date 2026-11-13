@@ -253,6 +253,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: read
     concurrency:
       group: release-${{ github.repository }}
       cancel-in-progress: false
@@ -292,6 +293,14 @@ jobs:
             tag="${GITHUB_REF_NAME}"
           fi
 
+          # 上一个正式版。新建的 tag 还不在列表里，已有 tag 的重跑则排除自己。
+          previous=$(git tag -l | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | grep -Fxv "$tag" | tail -n 1 || true)
+          node .github/scripts/release-notes.mjs \
+            --previous "$previous" \
+            --tag "$tag" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --out release-notes.txt
+
           node .github/scripts/release-updater.mjs stage \
             --dist dist \
             --out release-assets \
@@ -311,7 +320,7 @@ jobs:
               -R "${GITHUB_REPOSITORY}" \
               --target "${{ github.sha }}" \
               --title "gteam ${tag}" \
-              --generate-notes
+              --notes-file release-notes.txt
           fi
 
           gh release view "$tag" -R "${GITHUB_REPOSITORY}" --json body --jq '.body // ""' > release-notes.txt

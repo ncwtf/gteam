@@ -1,0 +1,12 @@
+# HTTPS reverse proxy for the gteam API and the WebSocket path /ws.
+# The server already accepts WebSocket upgrades on /ws of its HTTP port.
+# Caddy terminates TLS and forwards both to that port.
+{
+	email {$CADDY_EMAIL}
+}
+
+{$CADDY_DOMAIN} {
+	reverse_proxy server:3000 {
+		flush_interval -1
+	}
+}

@@ -10,6 +10,7 @@ import {
   WSEventType,
   TeamConnection
 } from '@gteam/shared';
+import { toWebSocketUrl } from './lib/serverUrl';
 
 interface TeamData {
   projects: Project[];
@@ -205,7 +206,7 @@ export const useStore = create<AppState>()(
         
         if (!connection || !teamData || teamData.ws) return;
 
-        const wsUrl = connection.serverUrl.replace(/^http/, 'ws').replace(/\/+$/, '') + '/ws';
+        const wsUrl = toWebSocketUrl(connection.serverUrl);
         const websocket = new WebSocket(wsUrl);
 
         websocket.onopen = () => {

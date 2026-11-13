@@ -1,8 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type CSSProperties } from 'react';
 import type { Update } from '@tauri-apps/plugin-updater';
 import { useStore } from '../store';
 import InviteCard from './InviteCard';
-import { supportedIDEs, writeIDEConfig, copyIDEConfigToClipboard } from '../lib/ideConfig';
+import {
+  configureIde,
+  copyIdeConfig,
+  inspectIdes,
+  removeIde,
+  statusLabel,
+  type IdeConfigStatus,
+  type IdeId,
+  type IdeInspection,
+} from '../lib/ideConfig';
 import { startWatchingRepo, stopWatchingRepo, listenToGitProgress, type GitProgressEvent } from '../lib/gitWatcher';
 import {
   checkForUpdate,
@@ -21,10 +30,13 @@ interface WatchedRepo {
 }
 
 function SettingsView() {
-  const { connections, getActiveConnection } = useStore();
+  const { connections, activeConnectionId, getActiveConnection } = useStore();
   const activeConnection = getActiveConnection();
   const [activeTab, setActiveTab] = useState<'ide' | 'git' | 'about'>('ide');
   const [ideMessage, setIdeMessage] = useState('');
+  const [ideMessageOk, setIdeMessageOk] = useState(true);
+  const [ideInspections, setIdeInspections] = useState<IdeInspection[]>([]);
+  const [ideBusy, setIdeBusy] = useState<IdeId | null>(null);
   const [gitRepoPath, setGitRepoPath] = useState('');
   const [gitBranch, setGitBranch] = useState('');
   const [requirementId, setRequirementId] = useState('');
@@ -57,19 +69,56 @@ function SettingsView() {
     };
   }, []);
 
-  // Example IDE configs (not used, removed to fix TypeScript errors)
+  const refreshIdes = async () => {
+    try {
+      setIdeInspections(await inspectIdes(connections, activeConnectionId));
+    } catch (error) {
+      console.warn('读取 IDE 配置失败', error);
+    }
+  };
 
-  const handleWriteIDEConfig = async (ide: typeof supportedIDEs[0]) => {
-    setIdeMessage('写入中...');
-    const result = await writeIDEConfig(ide, connections);
-    setIdeMessage(result.message);
+  useEffect(() => {
+    if (activeTab !== 'ide') return;
+    refreshIdes();
+  }, [activeTab, connections, activeConnectionId]);
+
+  const showIdeResult = (success: boolean, message: string) => {
+    setIdeMessageOk(success);
+    setIdeMessage(message);
     setTimeout(() => setIdeMessage(''), 5000);
   };
 
-  const handleCopyIDEConfig = async (ide: typeof supportedIDEs[0]) => {
-    await copyIDEConfigToClipboard(ide, connections);
-    setIdeMessage(`${ide.name} 配置已复制到剪贴板`);
-    setTimeout(() => setIdeMessage(''), 3000);
+  const handleConfigureIde = async (id: IdeId) => {
+    setIdeBusy(id);
+    const result = await configureIde(id, connections, activeConnectionId);
+    showIdeResult(result.success, result.message);
+    await refreshIdes();
+    setIdeBusy(null);
+  };
+
+  const handleRemoveIde = async (id: IdeId) => {
+    setIdeBusy(id);
+    const result = await removeIde(id);
+    showIdeResult(result.success, result.message);
+    await refreshIdes();
+    setIdeBusy(null);
+  };
+
+  const handleCopyIde = async (id: IdeId) => {
+    try {
+      await copyIdeConfig(id, connections, activeConnectionId);
+      const name = ideInspections.find((ide) => ide.id === id)?.name ?? id;
+      showIdeResult(true, `${name} 配置已复制到剪贴板`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      showIdeResult(false, `复制失败: ${message}`);
+    }
+  };
+
+  const configureLabel = (status: IdeConfigStatus) => {
+    if (status === 'needs_repair') return '修复';
+    if (status === 'configured') return '更新配置';
+    return '一键配置';
   };
 
   const handleAddGitRepo = async () => {
@@ -171,7 +220,14 @@ function SettingsView() {
       {activeTab === 'ide' && (
         <div>
           {ideMessage && (
-            <div className="card" style={{ backgroundColor: '#e6f4ea', borderColor: '#00aa00', marginBottom: '16px' }}>
+            <div
+              className="card"
+              style={{
+                backgroundColor: ideMessageOk ? '#e6f4ea' : '#fdecea',
+                borderColor: ideMessageOk ? '#00aa00' : '#d93025',
+                marginBottom: '16px',
+              }}
+            >
               {ideMessage}
             </div>
           )}
@@ -179,15 +235,16 @@ function SettingsView() {
           <div className="card">
             <div className="card-title">🔌 IDE MCP 配置</div>
             <div className="card-content" style={{ marginBottom: '16px' }}>
-              一键配置或复制配置到你使用的 IDE。当前已连接 {connections.length} 个团队。
+              把当前 {connections.length} 个团队写进 IDE 的用户级 MCP 配置。程序随 gteam 一起安装，不需要本机另装 Node.js，也不会指向源码目录。已有的 gteam 项会被更新，其他 MCP 服务器保持原样。
             </div>
-            
-            {supportedIDEs.map((ide) => (
-              <div key={ide.name} style={{ marginBottom: '24px', padding: '16px', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '8px' }}>
+
+            {ideInspections.map((ide) => (
+              <div key={ide.id} style={{ marginBottom: '24px', padding: '16px', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: '12px' }}>
                   <div>
                     <h3 style={{ marginBottom: '4px', fontSize: '16px', fontWeight: 600 }}>
                       {ide.name}
+                      <span style={statusStyle(ide.status)}>{statusLabel(ide.status)}</span>
                     </h3>
                     <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
                       {ide.description}
@@ -196,18 +253,28 @@ function SettingsView() {
                       配置文件: <code style={{ backgroundColor: 'white', padding: '2px 6px', borderRadius: '4px' }}>{ide.configPath}</code>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '8px' }}>
+                  <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
                     <button
-                      onClick={() => handleWriteIDEConfig(ide)}
+                      onClick={() => handleConfigureIde(ide.id)}
                       className="btn"
                       style={{ fontSize: '14px', padding: '8px 16px' }}
+                      disabled={ideBusy !== null || connections.length === 0}
                     >
-                      一键配置
+                      {ideBusy === ide.id ? '写入中...' : configureLabel(ide.status)}
                     </button>
                     <button
-                      onClick={() => handleCopyIDEConfig(ide)}
+                      onClick={() => handleRemoveIde(ide.id)}
                       className="btn btn-secondary"
                       style={{ fontSize: '14px', padding: '8px 16px' }}
+                      disabled={ideBusy !== null || ide.status === 'unconfigured'}
+                    >
+                      移除
+                    </button>
+                    <button
+                      onClick={() => handleCopyIde(ide.id)}
+                      className="btn btn-secondary"
+                      style={{ fontSize: '14px', padding: '8px 16px' }}
+                      disabled={ideBusy !== null || connections.length === 0}
                     >
                       复制配置
                     </button>
@@ -349,6 +416,21 @@ function SettingsView() {
       )}
     </div>
   );
+}
+
+function statusStyle(status: IdeConfigStatus): CSSProperties {
+  const color = status === 'configured' ? '#0d7a32' : status === 'needs_repair' ? '#b06000' : '#666';
+  const background = status === 'configured' ? '#e6f4ea' : status === 'needs_repair' ? '#fff4e5' : '#f1f3f4';
+  return {
+    marginLeft: '8px',
+    fontSize: '12px',
+    fontWeight: 600,
+    color,
+    background,
+    borderRadius: '999px',
+    padding: '2px 8px',
+    verticalAlign: 'middle',
+  };
 }
 
 export default SettingsView;

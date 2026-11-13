@@ -12,9 +12,14 @@
     "dev:desktop": "pnpm --filter @gteam/desktop dev",
     "dev:mcp": "pnpm --filter @gteam/mcp-server dev",
     "build": "pnpm -r build",
-    "test": "pnpm -r test",
+    "bundle:mcp": "node scripts/bundle-mcp-sidecar.mjs",
+    "test": "pnpm -r test && node --test scripts/bundle-mcp-sidecar.test.mjs .github/scripts/release-notes.test.mjs && bash scripts/install.test.sh",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "postject": "1.0.0-alpha.6"
   },
   "engines": {
     "node": ">=18.0.0",
