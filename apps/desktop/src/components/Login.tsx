@@ -7,7 +7,13 @@ function Login({ onAddTeam }: LoginProps) {
   return (
     <div className="login-container">
       <div className="login-box">
-        <h1 className="login-title">gteam</h1>
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <img 
+            src="/lockup-stacked-on-dark.svg" 
+            alt="gteam" 
+            style={{ width: '120px', height: 'auto' }}
+          />
+        </div>
         <p style={{ 
           textAlign: 'center', 
           color: 'var(--text-secondary)', 
