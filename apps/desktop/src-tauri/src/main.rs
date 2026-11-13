@@ -1,7 +1,11 @@
 // Prevents additional console window on Windows in release
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod git_watcher;
+mod keyring_store;
+
 use tauri::Manager;
+use std::sync::Mutex;
 
 fn main() {
     tauri::Builder::default()
@@ -10,6 +14,16 @@ fn main() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
+        .manage(Mutex::new(git_watcher::GitWatcher::new()))
+        .invoke_handler(tauri::generate_handler![
+            git_watcher::start_watching_repo,
+            git_watcher::stop_watching_repo,
+            git_watcher::get_current_git_status,
+            keyring_store::store_team_token,
+            keyring_store::get_team_token,
+            keyring_store::delete_team_token,
+            keyring_store::list_stored_teams,
+        ])
         .setup(|app| {
             // 设置系统托盘
             #[cfg(desktop)]

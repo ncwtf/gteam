@@ -82,13 +82,14 @@ export const claudeConfig: IDEConfig = {
 
 /**
  * Claude Code 配置
- * 用户范围: ~/.claude.json (推荐)
- * 项目范围: .mcp.json 或通过 claude mcp add 命令
+ * 用户范围: ~/.claude.json (推荐) 或使用 `claude mcp add` 命令
+ * 项目范围: 项目根目录 .mcp.json
+ * 注意: 不是 ~/.claude/mcp.json
  */
 export const claudeCodeConfig: IDEConfig = {
   name: 'Claude Code',
   configPath: '~/.claude.json',
-  description: 'Claude Code CLI - MCP 配置 (用户范围)',
+  description: 'Claude Code CLI - 用户范围 MCP 配置',
   generateConfig: (connections, mcpServerPath) => {
     const teams = connections.map(conn => ({
       serverUrl: conn.serverUrl,
@@ -114,13 +115,14 @@ export const claudeCodeConfig: IDEConfig = {
 };
 
 /**
- * Codex (OpenAI Codex CLI) 配置
+ * Codex 配置
  * 路径: ~/.codex/config.toml
+ * 格式: TOML [mcp_servers.*] 部分
  */
 export const codexConfig: IDEConfig = {
   name: 'Codex',
   configPath: '~/.codex/config.toml',
-  description: 'OpenAI Codex CLI - TOML 配置',
+  description: 'Codex - TOML 格式 MCP 配置',
   generateConfig: (connections, mcpServerPath) => {
     const teams = connections.map(conn => ({
       serverUrl: conn.serverUrl,
@@ -128,11 +130,11 @@ export const codexConfig: IDEConfig = {
       teamName: conn.teamName
     }));
 
-    // Codex 使用 TOML 格式
-    let toml = `[mcp.servers.gteam]\n`;
+    // Codex 使用 TOML 格式，[mcp_servers.*] 部分
+    let toml = `[mcp_servers.gteam]\n`;
     toml += `command = "node"\n`;
     toml += `args = ["${mcpServerPath}"]\n\n`;
-    toml += `[mcp.servers.gteam.env]\n`;
+    toml += `[mcp_servers.gteam.env]\n`;
     toml += `GTEAM_TEAMS = '${JSON.stringify(teams)}'\n`;
     toml += `GTEAM_DEFAULT_TEAM = "${connections[0]?.teamName || ''}"\n`;
 

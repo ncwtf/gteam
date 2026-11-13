@@ -24,9 +24,7 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "axios": "^1.6.5",
-    "zustand": "^4.4.7",
-    "simple-git": "^3.21.0",
-    "chokidar": "^3.5.3"
+    "zustand": "^4.4.7"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",

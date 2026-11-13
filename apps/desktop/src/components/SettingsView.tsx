@@ -1,8 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useStore } from '../store';
 import { supportedIDEs, writeIDEConfig, copyIDEConfigToClipboard } from '../lib/ideConfig';
-// TODO: Move gitWatcher to Rust backend (chokidar/simple-git don't work in browser)
-// import { gitWatcher, WatchedRepo } from '../lib/gitWatcher';
+import { startWatchingRepo, stopWatchingRepo, listenToGitProgress, type GitProgressEvent } from '../lib/gitWatcher';
 
 interface WatchedRepo {
   id: string;
@@ -20,8 +19,23 @@ function SettingsView() {
   const [gitRepoPath, setGitRepoPath] = useState('');
   const [gitBranch, setGitBranch] = useState('');
   const [requirementId, setRequirementId] = useState('');
-  // TODO: Re-enable after moving gitWatcher to Rust
-  const [watchedRepos] = useState<WatchedRepo[]>([]);
+  const [watchedRepos, setWatchedRepos] = useState<WatchedRepo[]>([]);
+
+  useEffect(() => {
+    // 监听 Git 进度事件
+    let unlisten: (() => void) | undefined;
+    
+    listenToGitProgress((event: GitProgressEvent) => {
+      console.log('Git progress:', event);
+      // 可以在这里上报到服务器或更新 UI
+    }).then(fn => {
+      unlisten = fn;
+    });
+
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, []);
 
   // Example IDE configs (not used, removed to fix TypeScript errors)
 
@@ -39,33 +53,40 @@ function SettingsView() {
   };
 
   const handleAddGitRepo = async () => {
-    // TODO: Implement in Rust backend
-    alert('Git监控功能正在迁移到Rust后端，暂时不可用');
-    /* if (!activeConnection || !gitRepoPath || !gitBranch || !requirementId) {
+    if (!activeConnection || !gitRepoPath || !gitBranch || !requirementId) {
       alert('请填写所有字段');
       return;
     }
 
-    const repo: WatchedRepo = {
-      id: `${activeConnection.id}-${gitRepoPath}`,
-      path: gitRepoPath,
-      requirementId,
-      connectionId: activeConnection.id,
-      branch: gitBranch
-    };
+    try {
+      const repo: WatchedRepo = {
+        id: `${activeConnection.id}-${gitRepoPath}`,
+        path: gitRepoPath,
+        requirementId,
+        connectionId: activeConnection.id,
+        branch: gitBranch
+      };
 
-    await gitWatcher.addRepo(repo);
-    setWatchedRepos(gitWatcher.getWatchedRepos());
-    setGitRepoPath('');
-    setGitBranch('');
-    setRequirementId(''); */
+      await startWatchingRepo(gitRepoPath);
+      setWatchedRepos([...watchedRepos, repo]);
+      setGitRepoPath('');
+      setGitBranch('');
+      setRequirementId('');
+    } catch (error) {
+      alert(`添加监控失败: ${error}`);
+    }
   };
 
-  const handleRemoveGitRepo = async (_repoId: string) => {
-    // TODO: Implement in Rust backend
-    alert('Git监控功能正在迁移到Rust后端，暂时不可用');
-    // await gitWatcher.removeRepo(_repoId);
-    // setWatchedRepos(gitWatcher.getWatchedRepos());
+  const handleRemoveGitRepo = async (repoId: string) => {
+    const repo = watchedRepos.find(r => r.id === repoId);
+    if (!repo) return;
+
+    try {
+      await stopWatchingRepo(repo.path);
+      setWatchedRepos(watchedRepos.filter(r => r.id !== repoId));
+    } catch (error) {
+      alert(`移除监控失败: ${error}`);
+    }
   };
 
   return (
