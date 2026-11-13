@@ -56,7 +56,12 @@ function AddTeamModal({ onClose }: AddTeamModalProps) {
         setError(response.data.error || '创建失败');
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || '无法连接服务器，请检查地址和端口');
+      setError(
+        err.response?.data?.error ||
+          (err.response?.status === 404
+            ? '服务器版本过旧，不支持此操作，请在服务器上重新运行安装脚本更新'
+            : '无法连接服务器，请检查地址和端口')
+      );
     } finally {
       setLoading(false);
     }
@@ -104,7 +109,12 @@ function AddTeamModal({ onClose }: AddTeamModalProps) {
         setError(response.data.error || '连接失败');
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || '无法连接服务器，请检查地址和端口');
+      setError(
+        err.response?.data?.error ||
+          (err.response?.status === 404
+            ? '服务器版本过旧，不支持此操作，请在服务器上重新运行安装脚本更新'
+            : '无法连接服务器，请检查地址和端口')
+      );
     } finally {
       setLoading(false);
     }
@@ -159,7 +169,12 @@ function AddTeamModal({ onClose }: AddTeamModalProps) {
         setError(response.data.error || '加入失败');
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || '无法连接服务器，请检查地址和端口');
+      setError(
+        err.response?.data?.error ||
+          (err.response?.status === 404
+            ? '服务器版本过旧，不支持此操作，请在服务器上重新运行安装脚本更新'
+            : '无法连接服务器，请检查地址和端口')
+      );
     } finally {
       setLoading(false);
     }
