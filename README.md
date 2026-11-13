@@ -1,8 +1,8 @@
-# teamctx
+# gteam (God Team)
 
 **AI 时代的去中心化团队协作工具** - 跨平台桌面应用 + 自托管服务 + MCP 服务器
 
-teamctx 帮助团队成员和他们的 AI 助手无缝共享上下文信息，解决多人多 AI 协作中信息流失的问题。
+gteam 帮助团队成员和他们的 AI 助手无缝共享上下文信息，解决多人多 AI 协作中信息流失的问题。
 
 ## ✨ 核心特性
 
@@ -42,7 +42,7 @@ teamctx 帮助团队成员和他们的 AI 助手无缝共享上下文信息，�
 ### 项目结构
 
 ```
-teamctx/
+gteam/
 ├── apps/
 │   ├── server/          # 后端服务 (每个团队部署一份)
 │   │   ├── REST API     # 项目/文档/需求/问题 CRUD
@@ -143,8 +143,8 @@ pnpm dev:desktop
 
 ```bash
 cd packages/mcp-server
-export GTEAM_API_URL=http://localhost:3000
-export GTEAM_TOKEN=your-jwt-token  # 从登录获取
+export GTEAM_TEAMS='[{"serverUrl":"http://localhost:3000","token":"your-jwt-token","teamName":"MyTeam"}]'
+export GTEAM_DEFAULT_TEAM=MyTeam
 pnpm dev
 ```
 
@@ -157,12 +157,12 @@ pnpm dev
 ```json
 {
   "mcpServers": {
-    "teamctx": {
+    "gteam": {
       "command": "node",
-      "args": ["/path/to/teamctx/packages/mcp-server/dist/cli.js"],
+      "args": ["/path/to/gteam/packages/mcp-server/dist/cli.js"],
       "env": {
-        "TEAMCTX_TEAMS": "[{\"serverUrl\":\"https://team1.com\",\"token\":\"token1\",\"teamName\":\"MyTeam\"},{\"serverUrl\":\"https://team2.com\",\"token\":\"token2\",\"teamName\":\"ClientTeam\"}]",
-        "TEAMCTX_DEFAULT_TEAM": "MyTeam"
+        "GTEAM_TEAMS": "[{\"serverUrl\":\"https://team1.com\",\"token\":\"token1\",\"teamName\":\"MyTeam\"},{\"serverUrl\":\"https://team2.com\",\"token\":\"token2\",\"teamName\":\"ClientTeam\"}]",
+        "GTEAM_DEFAULT_TEAM": "MyTeam"
       }
     }
   }
@@ -171,15 +171,15 @@ pnpm dev
 
 ### 配置说明
 
-- `TEAMCTX_TEAMS`: JSON 数组，包含所有团队配置
+- `GTEAM_TEAMS`: JSON 数组，包含所有团队配置
   - `serverUrl`: 团队服务器 URL
   - `token`: 该服务器的 JWT token
   - `teamName`: 团队名称（用于识别）
 - `GTEAM_DEFAULT_TEAM`: 默认团队（可选）
 
-### Claude Desktop
+### Claude Desktop / Claude Code
 
-编辑 `~/.config/claude/mcp.json` (使用相同配置)
+编辑 `~/.config/claude/mcp.json` 或 `~/.claude.json` (使用相同配置)
 
 ### VS Code Copilot / Windsurf
 
