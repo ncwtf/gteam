@@ -1,2 +1,2 @@
-export * from './types';
-export { WSEventType, MemberRole, DocumentPartition } from './types';
+export * from './types.js';
+export { WSEventType, MemberRole, DocumentPartition } from './types.js';
