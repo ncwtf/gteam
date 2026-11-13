@@ -332,6 +332,28 @@ pnpm tauri build
 
 欢迎提交 Issue 和 Pull Request!
 
-## 📄 License
+## 📄 许可证 (License)
 
-MIT
+gteam 采用基于组件的双重许可证模型：
+
+### Apache-2.0 组件
+
+- **桌面应用** (`apps/desktop/`)
+- **MCP 服务器** (`packages/mcp-server/`)
+- **共享库** (`packages/shared/`)
+
+这些组件使用 **Apache License 2.0** 许可。
+
+### AGPL-3.0 组件
+
+- **服务器** (`apps/server/`)
+
+服务器组件使用 **GNU Affero General Public License v3.0 (AGPL-3.0-only)** 许可。
+
+如果您需要服务器组件的商业许可证，请通过 [@ncwtf](https://github.com/ncwtf) 联系作者。
+
+详细信息请参阅 [LICENSING.md](./LICENSING.md)。
+
+### 商标声明
+
+**gteam** 名称和标志是 Hunter (ncwtf) 的商标，不在上述许可证范围内。使用 gteam 名称和标志需要单独授权。
