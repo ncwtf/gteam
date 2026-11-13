@@ -6,7 +6,7 @@ use tauri::Manager;
 /// must not point at a development checkout.
 #[tauri::command]
 pub fn mcp_server_path(app: tauri::AppHandle) -> Result<String, String> {
-    mcp_sidecar_path(&app).map(|path| path.to_string_lossy().to_string())
+    mcp_sidecar_path_for(&app).map(|path| path.to_string_lossy().to_string())
 }
 
 /// Existence check that is not limited to the webview filesystem scope.
@@ -19,40 +19,25 @@ pub fn paths_exist(paths: Vec<String>) -> Vec<bool> {
         .collect()
 }
 
-fn mcp_sidecar_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let file_name = sidecar_file_name();
-    let mut candidates = Vec::new();
-
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            candidates.push(dir.join(&file_name));
-        }
-    }
-    if let Ok(resource_dir) = app.path().resource_dir() {
-        candidates.push(resource_dir.join(&file_name));
-        if let Some(parent) = resource_dir.parent() {
-            candidates.push(parent.join(&file_name));
-            candidates.push(parent.join("MacOS").join(&file_name));
-        }
-    }
-    candidates.push(PathBuf::from("/usr/bin").join(&file_name));
-
-    for path in &candidates {
-        if path.is_file() {
-            return Ok(path.clone());
-        }
-    }
-    Err(format!(
-        "未找到随应用安装的 MCP 程序（{}）",
-        file_name
-    ))
+fn current_executable() -> Option<PathBuf> {
+    // Same executable path the shell plugin uses for `sidecar()`, including
+    // canonicalization. Fall back to the raw path if that lookup fails.
+    tauri::utils::platform::current_exe()
+        .ok()
+        .or_else(|| std::env::current_exe().ok())
 }
 
-fn sidecar_file_name() -> String {
+fn mcp_sidecar_path_for(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let triple = env!("GTEAM_TARGET_TRIPLE");
-    if cfg!(windows) {
-        format!("gteam-mcp-{triple}.exe")
-    } else {
-        format!("gteam-mcp-{triple}")
-    }
+    let windows = cfg!(windows);
+    let exe = current_executable();
+    let resource = app.path().resource_dir().ok();
+    let candidates = crate::mcp_sidecar_path::candidate_paths(
+        exe.as_deref(),
+        resource.as_deref(),
+        triple,
+        windows,
+    );
+    crate::mcp_sidecar_path::first_existing(&candidates)
+        .ok_or_else(|| crate::mcp_sidecar_path::missing_message(triple, windows))
 }
