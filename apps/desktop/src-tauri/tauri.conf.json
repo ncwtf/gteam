@@ -12,6 +12,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -33,6 +34,17 @@
     ],
     "security": {
       "csp": null
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFBQzYxQjc1NTUwRjRCRUIKUldUclN3OVZkUnZHcW5zajJoSkd4NHRsVkdEajRTRDNxMXkrczhOY0g3V0tpMTZ3Q2MwWlJ6SjUK",
+      "endpoints": [
+        "https://github.com/ncwtf/gteam/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }

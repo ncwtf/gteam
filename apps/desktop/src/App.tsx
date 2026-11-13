@@ -10,6 +10,7 @@ import IssuesView from './components/IssuesView';
 import SettingsView from './components/SettingsView';
 import FloatingWindow from './components/FloatingWindow';
 import AddTeamModal from './components/AddTeamModal';
+import UpdateBanner from './components/UpdateBanner';
 
 type View = 'projects' | 'documents' | 'requirements' | 'issues' | 'settings';
 
@@ -53,6 +54,7 @@ function App() {
   if (connections.length === 0) {
     return (
       <>
+        <UpdateBanner />
         <Login onAddTeam={() => setShowAddTeam(true)} />
         {showAddTeam && <AddTeamModal onClose={() => setShowAddTeam(false)} />}
       </>
@@ -67,6 +69,7 @@ function App() {
 
   return (
     <div className="container">
+      <UpdateBanner />
       <TeamSidebar onAddTeam={() => setShowAddTeam(true)} />
       <Sidebar currentView={currentView} onViewChange={setCurrentView} />
       <main className="main-content">

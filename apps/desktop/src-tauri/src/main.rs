@@ -15,6 +15,8 @@ fn main() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_os::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(Mutex::new(git_watcher::GitWatcher::new()))
         .invoke_handler(tauri::generate_handler![
             git_watcher::start_watching_repo,

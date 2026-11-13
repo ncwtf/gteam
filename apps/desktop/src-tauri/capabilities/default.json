@@ -12,6 +12,8 @@
     "store:default",
     "dialog:default",
     "os:default",
+    "updater:default",
+    "process:default",
     "fs:default",
     {
       "identifier": "fs:allow-read-text-file",
