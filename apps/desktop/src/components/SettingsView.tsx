@@ -2,6 +2,7 @@ import { useState, useEffect, type CSSProperties } from 'react';
 import type { Update } from '@tauri-apps/plugin-updater';
 import { useStore } from '../store';
 import InviteCard from './InviteCard';
+import GitMonitorPanel from './GitMonitorPanel';
 import {
   configureIde,
   copyIdeConfig,
@@ -12,7 +13,6 @@ import {
   type IdeId,
   type IdeInspection,
 } from '../lib/ideConfig';
-import { startWatchingRepo, stopWatchingRepo, listenToGitProgress, type GitProgressEvent } from '../lib/gitWatcher';
 import {
   checkForUpdate,
   formatProgress,
@@ -20,14 +20,6 @@ import {
   getCurrentVersion,
   installAndRelaunch,
 } from '../lib/updater';
-
-interface WatchedRepo {
-  id: string;
-  path: string;
-  requirementId: string;
-  connectionId: string;
-  branch: string;
-}
 
 function SettingsView() {
   const { connections, activeConnectionId, getActiveConnection } = useStore();
@@ -37,10 +29,6 @@ function SettingsView() {
   const [ideMessageOk, setIdeMessageOk] = useState(true);
   const [ideInspections, setIdeInspections] = useState<IdeInspection[]>([]);
   const [ideBusy, setIdeBusy] = useState<IdeId | null>(null);
-  const [gitRepoPath, setGitRepoPath] = useState('');
-  const [gitBranch, setGitBranch] = useState('');
-  const [requirementId, setRequirementId] = useState('');
-  const [watchedRepos, setWatchedRepos] = useState<WatchedRepo[]>([]);
   const [appVersion, setAppVersion] = useState('…');
   const [updateMessage, setUpdateMessage] = useState('');
   const [checkingUpdate, setCheckingUpdate] = useState(false);
@@ -51,22 +39,6 @@ function SettingsView() {
     getCurrentVersion().then((version) => {
       setAppVersion(version ? formatVersion(version) : '未知');
     });
-  }, []);
-
-  useEffect(() => {
-    // 监听 Git 进度事件
-    let unlisten: (() => void) | undefined;
-    
-    listenToGitProgress((event: GitProgressEvent) => {
-      console.log('Git progress:', event);
-      // 可以在这里上报到服务器或更新 UI
-    }).then(fn => {
-      unlisten = fn;
-    });
-
-    return () => {
-      if (unlisten) unlisten();
-    };
   }, []);
 
   const refreshIdes = async () => {
@@ -121,31 +93,6 @@ function SettingsView() {
     return '一键配置';
   };
 
-  const handleAddGitRepo = async () => {
-    if (!activeConnection || !gitRepoPath || !gitBranch || !requirementId) {
-      alert('请填写所有字段');
-      return;
-    }
-
-    try {
-      const repo: WatchedRepo = {
-        id: `${activeConnection.id}-${gitRepoPath}`,
-        path: gitRepoPath,
-        requirementId,
-        connectionId: activeConnection.id,
-        branch: gitBranch
-      };
-
-      await startWatchingRepo(gitRepoPath);
-      setWatchedRepos([...watchedRepos, repo]);
-      setGitRepoPath('');
-      setGitBranch('');
-      setRequirementId('');
-    } catch (error) {
-      alert(`添加监控失败: ${error}`);
-    }
-  };
-
   const handleCheckUpdate = async () => {
     setCheckingUpdate(true);
     setUpdateMessage('');
@@ -175,18 +122,6 @@ function SettingsView() {
       console.warn('安装更新失败', error);
       setUpdateMessage('更新失败');
       setInstallingUpdate(false);
-    }
-  };
-
-  const handleRemoveGitRepo = async (repoId: string) => {
-    const repo = watchedRepos.find(r => r.id === repoId);
-    if (!repo) return;
-
-    try {
-      await stopWatchingRepo(repo.path);
-      setWatchedRepos(watchedRepos.filter(r => r.id !== repoId));
-    } catch (error) {
-      alert(`移除监控失败: ${error}`);
     }
   };
 
@@ -286,87 +221,7 @@ function SettingsView() {
         </div>
       )}
 
-      {activeTab === 'git' && (
-        <div>
-          <div className="card">
-            <div className="card-title">🌿 Git 监控设置</div>
-            <div className="card-content">
-              Git 监控会自动追踪你的本地代码仓库变化，并将提交记录同步到团队。
-              <div style={{ marginTop: '16px' }}>
-                <div className="form-group">
-                  <label>仓库路径 *</label>
-                  <input 
-                    type="text" 
-                    placeholder="/path/to/your/repo" 
-                    value={gitRepoPath}
-                    onChange={(e) => setGitRepoPath(e.target.value)}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Git 分支 *</label>
-                  <input 
-                    type="text" 
-                    placeholder="feature/my-feature" 
-                    value={gitBranch}
-                    onChange={(e) => setGitBranch(e.target.value)}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>关联需求 ID *</label>
-                  <input 
-                    type="text" 
-                    placeholder="需求 ID" 
-                    value={requirementId}
-                    onChange={(e) => setRequirementId(e.target.value)}
-                  />
-                  <small style={{ color: 'var(--text-secondary)', marginTop: '4px', display: 'block' }}>
-                    该仓库的提交将关联到此需求
-                  </small>
-                </div>
-                <button className="btn" onClick={handleAddGitRepo}>添加仓库</button>
-              </div>
-            </div>
-          </div>
-          
-          <div className="card">
-            <div className="card-title">当前监控的仓库 ({watchedRepos.length})</div>
-            <div className="card-content">
-              {watchedRepos.length === 0 ? (
-                <p style={{ color: 'var(--text-secondary)' }}>暂无监控的仓库</p>
-              ) : (
-                watchedRepos.map((repo) => {
-                  const connection = connections.find(c => c.id === repo.connectionId);
-                  return (
-                    <div key={repo.id} style={{ 
-                      padding: '12px', 
-                      backgroundColor: 'var(--bg-secondary)', 
-                      borderRadius: '6px', 
-                      marginBottom: '8px',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center'
-                    }}>
-                      <div>
-                        <div style={{ fontWeight: 500 }}>{repo.path}</div>
-                        <div style={{ fontSize: '14px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                          分支: {repo.branch} | 团队: {connection?.teamName} | 需求: {repo.requirementId}
-                        </div>
-                      </div>
-                      <button 
-                        className="btn btn-secondary" 
-                        onClick={() => handleRemoveGitRepo(repo.id)}
-                        style={{ fontSize: '14px', padding: '6px 12px' }}
-                      >
-                        移除
-                      </button>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {activeTab === 'git' && <GitMonitorPanel />}
 
       {activeTab === 'about' && (
         <div>

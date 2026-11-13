@@ -1,12 +1,12 @@
 // Prevents additional console window on Windows in release
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod git_monitor;
 mod git_watcher;
 mod keyring_store;
 mod mcp_runtime;
 mod mcp_sidecar_path;
 
-use std::sync::Mutex;
 use tauri::Emitter;
 use tauri::Manager;
 
@@ -20,11 +20,16 @@ fn main() {
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .manage(Mutex::new(git_watcher::GitWatcher::new()))
+        .manage(git_watcher::GitWatcher::new())
         .invoke_handler(tauri::generate_handler![
-            git_watcher::start_watching_repo,
-            git_watcher::stop_watching_repo,
-            git_watcher::get_current_git_status,
+            git_watcher::list_git_monitors,
+            git_watcher::inspect_git_source,
+            git_watcher::add_git_monitor,
+            git_watcher::update_git_monitor,
+            git_watcher::remove_git_monitor,
+            git_watcher::pending_git_progress,
+            git_watcher::ack_git_progress,
+            git_watcher::set_git_sync_error,
             keyring_store::store_team_token,
             keyring_store::get_team_token,
             keyring_store::delete_team_token,
@@ -33,6 +38,7 @@ fn main() {
             mcp_runtime::paths_exist,
         ])
         .setup(|app| {
+            git_watcher::restore(app.handle())?;
             #[cfg(desktop)]
             setup_tray(app)?;
             Ok(())

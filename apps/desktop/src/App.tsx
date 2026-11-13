@@ -14,12 +14,14 @@ import UpdateBanner from './components/UpdateBanner';
 import ErrorBanner from './components/ErrorBanner';
 import { reloadProjects } from './lib/teamData';
 import { restoreConnection } from './lib/session';
+import { useGitProgressSync } from './lib/gitSync';
 import { legacyTokenSnapshot, useStore } from './store';
 import ReconnectPrompt from './components/ReconnectPrompt';
 
 type View = 'projects' | 'documents' | 'requirements' | 'issues' | 'settings';
 
 function App() {
+  useGitProgressSync();
   const {
     connections,
     activeConnectionId,
