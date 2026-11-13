@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import axios from 'axios';
+import { normalizeServerUrl, parseInviteTarget, TeamConnection } from '@gteam/shared';
 import { useStore } from '../store';
-import { TeamConnection } from '@gteam/shared';
+import { getConnectionError } from '../lib/apiError';
+import { rememberToken } from '../lib/session';
 
 interface AddTeamModalProps {
   onClose: () => void;
@@ -20,11 +22,11 @@ function AddTeamModal({ onClose }: AddTeamModalProps) {
 
   const { addConnection } = useStore();
 
-  // 补全协议、去掉末尾斜杠
-  const normalizeUrl = (raw: string) => {
-    let u = raw.trim().replace(/\/+$/, '');
-    if (u && !/^https?:\/\//i.test(u)) u = `http://${u}`;
-    return u;
+  const finishConnection = async (connection: TeamConnection) => {
+    const warning = await rememberToken(connection.serverUrl, connection.token);
+    addConnection(connection);
+    if (warning) useStore.getState().setSessionNotice(warning);
+    onClose();
   };
 
   const handleSetup = async (e: React.FormEvent) => {
@@ -32,7 +34,7 @@ function AddTeamModal({ onClose }: AddTeamModalProps) {
     setError('');
     setLoading(true);
     try {
-      const normalizedUrl = normalizeUrl(serverUrl);
+      const normalizedUrl = normalizeServerUrl(serverUrl);
       const response = await axios.post(`${normalizedUrl}/api/auth/setup`, {
         teamName,
         name: userName || undefined,
@@ -40,8 +42,8 @@ function AddTeamModal({ onClose }: AddTeamModalProps) {
         password
       });
       if (response.data.success) {
-        const { user, token, teamName: createdTeam } = response.data.data;
-        addConnection({
+        const { user, token, teamName: createdTeam, teamId, isAdmin } = response.data.data;
+        await finishConnection({
           id: `${normalizedUrl}-${user.id}`,
           serverUrl: normalizedUrl,
           teamName: createdTeam || teamName,
@@ -49,19 +51,15 @@ function AddTeamModal({ onClose }: AddTeamModalProps) {
           userId: user.id,
           userName: user.name,
           isActive: false,
-          joinedAt: new Date()
+          joinedAt: new Date(),
+          teamId,
+          isAdmin: isAdmin !== false
         });
-        onClose();
       } else {
         setError(response.data.error || '创建失败');
       }
-    } catch (err: any) {
-      setError(
-        err.response?.data?.error ||
-          (err.response?.status === 404
-            ? '服务器版本过旧，不支持此操作，请在服务器上重新运行安装脚本更新'
-            : '无法连接服务器，请检查地址和端口')
-      );
+    } catch (err: unknown) {
+      setError(getConnectionError(err, '无法连接服务器，请检查地址和端口'));
     } finally {
       setLoading(false);
     }
@@ -73,48 +71,40 @@ function AddTeamModal({ onClose }: AddTeamModalProps) {
     setLoading(true);
 
     try {
-      // 确保 URL 格式正确
-      const normalizedUrl = normalizeUrl(serverUrl);
-      
-      // 登录获取 token
+      const normalizedUrl = normalizeServerUrl(serverUrl);
       const response = await axios.post(`${normalizedUrl}/api/auth/login`, {
         email,
         password
       });
 
-      if (response.data.success) {
-        const { user, token } = response.data.data;
-        
-        // 获取团队信息
-        const teamResponse = await axios
-          .get(`${normalizedUrl}/api/auth/team-info`, {
-            headers: { Authorization: `Bearer ${token}` }
-          })
-          .catch(() => ({ data: { data: null } }));
-
-        const connection: TeamConnection = {
-          id: `${normalizedUrl}-${user.id}`,
-          serverUrl: normalizedUrl,
-          teamName: teamResponse.data.data?.name || 'Team',
-          token,
-          userId: user.id,
-          userName: user.name,
-          isActive: false,
-          joinedAt: new Date()
-        };
-
-        addConnection(connection);
-        onClose();
-      } else {
+      if (!response.data.success) {
         setError(response.data.error || '连接失败');
+        return;
       }
-    } catch (err: any) {
-      setError(
-        err.response?.data?.error ||
-          (err.response?.status === 404
-            ? '服务器版本过旧，不支持此操作，请在服务器上重新运行安装脚本更新'
-            : '无法连接服务器，请检查地址和端口')
-      );
+
+      const { user, token } = response.data.data;
+      const teamResponse = await axios.get(`${normalizedUrl}/api/auth/team-info`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (teamResponse.data?.success === false || !teamResponse.data?.data?.id) {
+        throw new Error(teamResponse.data?.error || '未找到团队');
+      }
+      const team = teamResponse.data.data;
+
+      await finishConnection({
+        id: `${normalizedUrl}-${user.id}`,
+        serverUrl: normalizedUrl,
+        teamName: team.name || 'Team',
+        token,
+        userId: user.id,
+        userName: user.name,
+        isActive: false,
+        joinedAt: new Date(),
+        teamId: team.id,
+        isAdmin: Boolean(team.isAdmin)
+      });
+    } catch (err: unknown) {
+      setError(getConnectionError(err));
     } finally {
       setLoading(false);
     }
@@ -126,55 +116,44 @@ function AddTeamModal({ onClose }: AddTeamModalProps) {
     setLoading(true);
 
     try {
-      // 解析邀请链接或代码
-      let parsedServerUrl = serverUrl;
-      let parsedInviteCode = inviteCode;
-
-      // 支持 gteam:// 深链接
-      if (serverUrl.trim().startsWith('gteam://')) {
-        const url = new URL(serverUrl.trim());
-        const server = url.searchParams.get('server');
-        parsedServerUrl = server
-          ? server
-          : `https://${url.hostname}${url.port ? ':' + url.port : ''}`;
-        parsedInviteCode = url.searchParams.get('invite') || url.pathname.replace('/', '') || inviteCode;
+      const parsed = parseInviteTarget(serverUrl, inviteCode);
+      if (!parsed.serverUrl) {
+        setError('无法识别服务器地址');
+        setLoading(false);
+        return;
+      }
+      if (!parsed.inviteCode) {
+        setError('请填写邀请码，或使用包含邀请码的链接');
+        setLoading(false);
+        return;
       }
 
-      parsedServerUrl = normalizeUrl(parsedServerUrl);
-
-      // 使用邀请码注册/加入
-      const response = await axios.post(`${parsedServerUrl}/api/auth/join-invite`, {
-        inviteCode: parsedInviteCode,
+      const response = await axios.post(`${parsed.serverUrl}/api/auth/join-invite`, {
+        inviteCode: parsed.inviteCode,
         email,
         password
       });
 
-      if (response.data.success) {
-        const { user, token, teamName } = response.data.data;
-
-        const connection: TeamConnection = {
-          id: `${parsedServerUrl}-${user.id}`,
-          serverUrl: parsedServerUrl,
-          teamName: teamName || 'Team',
-          token,
-          userId: user.id,
-          userName: user.name,
-          isActive: false,
-          joinedAt: new Date()
-        };
-
-        addConnection(connection);
-        onClose();
-      } else {
+      if (!response.data.success) {
         setError(response.data.error || '加入失败');
+        return;
       }
-    } catch (err: any) {
-      setError(
-        err.response?.data?.error ||
-          (err.response?.status === 404
-            ? '服务器版本过旧，不支持此操作，请在服务器上重新运行安装脚本更新'
-            : '无法连接服务器，请检查地址和端口')
-      );
+
+      const { user, token, teamName, teamId, isAdmin } = response.data.data;
+      await finishConnection({
+        id: `${parsed.serverUrl}-${user.id}`,
+        serverUrl: parsed.serverUrl,
+        teamName: teamName || 'Team',
+        token,
+        userId: user.id,
+        userName: user.name,
+        isActive: false,
+        joinedAt: new Date(),
+        teamId,
+        isAdmin: Boolean(isAdmin)
+      });
+    } catch (err: unknown) {
+      setError(getConnectionError(err));
     } finally {
       setLoading(false);
     }
@@ -210,19 +189,19 @@ function AddTeamModal({ onClose }: AddTeamModalProps) {
         <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
           <button
             className={mode === 'login' ? 'btn' : 'btn btn-secondary'}
-            onClick={() => setMode('login')}
+            onClick={() => { setMode('login'); setError(''); }}
           >
             已有账号登录
           </button>
           <button
             className={mode === 'invite' ? 'btn' : 'btn btn-secondary'}
-            onClick={() => setMode('invite')}
+            onClick={() => { setMode('invite'); setError(''); }}
           >
             使用邀请码
           </button>
           <button
             className={mode === 'setup' ? 'btn' : 'btn btn-secondary'}
-            onClick={() => setMode('setup')}
+            onClick={() => { setMode('setup'); setError(''); }}
           >
             新服务器创建团队
           </button>

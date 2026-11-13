@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useStore, createApiClient } from '../store';
+import { getApiErrorMessage } from '../lib/apiError';
 
 interface CreateIssueModalProps {
   projectId: string;
@@ -26,18 +27,21 @@ function CreateIssueModal({ projectId, onClose, onSuccess }: CreateIssueModalPro
 
     try {
       const api = createApiClient(activeConnection);
-      await api.post('/api/issues', {
+      const response = await api.post('/api/issues', {
         projectId,
         title,
         description,
         priority,
         createdByAI: false
       });
+      if (response.data?.success === false) {
+        throw new Error(response.data.error || '创建失败');
+      }
 
       onSuccess();
       onClose();
-    } catch (err: any) {
-      setError(err.response?.data?.error || '创建失败');
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, '创建失败'));
     } finally {
       setLoading(false);
     }

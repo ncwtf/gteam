@@ -19,16 +19,21 @@ function FloatingWindow() {
 
   const getEventLabel = (type: WSEventType) => {
     const labels: Record<WSEventType, string> = {
+      [WSEventType.ProjectCreated]: '📁 新项目',
+      [WSEventType.ProjectUpdated]: '📁 项目更新',
+      [WSEventType.ProjectDeleted]: '🗑️ 项目删除',
       [WSEventType.DocumentCreated]: '📄 新文档',
       [WSEventType.DocumentUpdated]: '📝 文档更新',
       [WSEventType.DocumentDeleted]: '🗑️ 文档删除',
       [WSEventType.RequirementCreated]: '✅ 新需求',
       [WSEventType.RequirementUpdated]: '📋 需求更新',
       [WSEventType.RequirementStatusChanged]: '🔄 需求状态变更',
+      [WSEventType.RequirementDeleted]: '🗑️ 需求删除',
       [WSEventType.GitProgressUpdated]: '🌿 Git 提交',
       [WSEventType.IssueCreated]: '🔔 新问题',
       [WSEventType.IssueUpdated]: '📌 问题更新',
       [WSEventType.IssueReplied]: '💬 问题回复',
+      [WSEventType.IssueDeleted]: '🗑️ 问题删除',
       [WSEventType.UserJoined]: '👋 成员加入',
       [WSEventType.UserLeft]: '👋 成员离开'
     };
