@@ -29,6 +29,19 @@ function AddTeamModal({ onClose }: AddTeamModalProps) {
     return u;
   };
 
+  // 旧服务器没有对应接口时会 404，要和「连不上」区分开
+  const connectionError = (err: unknown) => {
+    if (axios.isAxiosError(err)) {
+      const data = err.response?.data as { error?: unknown } | undefined;
+      if (typeof data?.error === 'string' && data.error.trim()) return data.error;
+      if (err.response?.status === 404) {
+        return '服务器版本过旧，不支持此操作，请在服务器上重新运行安装脚本更新';
+      }
+      if (!err.response) return '无法连接服务器，请检查地址和端口';
+    }
+    return apiErrorMessage(err, '无法连接服务器，请检查地址和端口');
+  };
+
   const handleSetup = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -61,7 +74,7 @@ function AddTeamModal({ onClose }: AddTeamModalProps) {
         setError(response.data?.error || '服务器返回的登录信息不完整');
       }
     } catch (err) {
-      setError(apiErrorMessage(err, '无法连接服务器，请检查地址和端口'));
+      setError(connectionError(err));
     } finally {
       setLoading(false);
     }
@@ -114,7 +127,7 @@ function AddTeamModal({ onClose }: AddTeamModalProps) {
         setError(response.data?.error || '服务器返回的登录信息不完整');
       }
     } catch (err) {
-      setError(apiErrorMessage(err, '无法连接服务器，请检查地址和端口'));
+      setError(connectionError(err));
     } finally {
       setLoading(false);
     }
@@ -177,7 +190,7 @@ function AddTeamModal({ onClose }: AddTeamModalProps) {
         setError(response.data?.error || '服务器返回的登录信息不完整');
       }
     } catch (err) {
-      setError(apiErrorMessage(err, '无法连接服务器，请检查地址和端口'));
+      setError(connectionError(err));
     } finally {
       setLoading(false);
     }

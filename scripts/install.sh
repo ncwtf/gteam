@@ -193,7 +193,10 @@ if [[ "$HTTP_PORT" == "$WS_PORT" ]]; then
   exit 1
 fi
 
-for spec in "$HTTP_PORT:$HTTP_BIND" "$WS_PORT:$WS_BIND"; do
+# 沿用 .env 重装时，端口多半正被 gteam 自己的容器占用，跳过检查
+REUSE_ENV=0
+if [[ -f .env && "$REINSTALL" -eq 0 ]]; then REUSE_ENV=1; fi
+[[ "$REUSE_ENV" -eq 1 ]] || for spec in "$HTTP_PORT:$HTTP_BIND" "$WS_PORT:$WS_BIND"; do
   port="${spec%%:*}"
   bind="${spec##*:}"
   if port_in_use "$port" "$bind"; then
