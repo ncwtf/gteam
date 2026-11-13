@@ -3,11 +3,14 @@ name: CI
 on:
   # Branch pushes that already have a pull request would otherwise run this
   # workflow twice. Pull requests cover feature branches; push covers main and tags.
+  # Publishing a desktop release is manual: run this workflow with workflow_dispatch
+  # (or push a v* tag). Merging to main does not bump the version or publish.
   push:
     branches: [main]
     tags: ['v*']
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -123,12 +126,13 @@ jobs:
   build-desktop:
     name: Build Desktop App
     needs: [changes]
-    if: always() && !cancelled() && needs.changes.outputs.desktop != 'false'
+    if: always() && !cancelled() && (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.desktop != 'false')
     strategy:
       fail-fast: false
-      # PRs and feature branches build Linux only; main and v* tags build every platform.
+      # PRs and pushes to main build Linux only.
+      # workflow_dispatch and v* tags build all four targets and publish a release.
       matrix:
-        include: ${{ fromJSON((github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) && '[{"platform":"macos-latest","target":"x86_64-apple-darwin"},{"platform":"macos-latest","target":"aarch64-apple-darwin"},{"platform":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu"},{"platform":"windows-latest","target":"x86_64-pc-windows-msvc"}]' || '[{"platform":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu"}]') }}
+        include: ${{ fromJSON((github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')) && '[{"platform":"macos-latest","target":"x86_64-apple-darwin"},{"platform":"macos-latest","target":"aarch64-apple-darwin"},{"platform":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu"},{"platform":"windows-latest","target":"x86_64-pc-windows-msvc"}]' || '[{"platform":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu"}]') }}
     
     runs-on: ${{ matrix.platform }}
     
@@ -171,7 +175,7 @@ jobs:
         run: pnpm build
 
       - name: Set next patch version
-        if: github.ref == 'refs/heads/main'
+        if: github.event_name == 'workflow_dispatch'
         shell: bash
         run: |
           git fetch --tags --force
@@ -248,7 +252,7 @@ jobs:
 
   release:
     name: Publish Release
-    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    if: success() && (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v'))
     needs: [test, build-desktop]
     runs-on: ubuntu-latest
     permissions:
@@ -272,7 +276,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            tag="${GITHUB_REF_NAME}"
+          else
             if git tag --points-at "${GITHUB_SHA}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
               echo "Commit already has a v* tag; skipping release"
               exit 0
@@ -289,8 +295,6 @@ jobs:
             patch=${ver##*.}
             tag="v${major}.${minor}.$((patch + 1))"
             echo "Creating ${tag} from ${latest}"
-          else
-            tag="${GITHUB_REF_NAME}"
           fi
 
           # 上一个正式版。新建的 tag 还不在列表里，已有 tag 的重跑则排除自己。

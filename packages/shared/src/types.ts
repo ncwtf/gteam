@@ -16,6 +16,7 @@ export interface TeamConnection {
   token: string; // 该服务器的 JWT token
   userId: string;
   userName: string;
+  email?: string;
   isActive: boolean; // 当前激活的团队
   joinedAt: Date;
   lastSyncAt?: Date;
