@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { Update } from '@tauri-apps/plugin-updater';
 import { useStore } from '../store';
+import InviteCard from './InviteCard';
 import { supportedIDEs, writeIDEConfig, copyIDEConfigToClipboard } from '../lib/ideConfig';
 import { startWatchingRepo, stopWatchingRepo, listenToGitProgress, type GitProgressEvent } from '../lib/gitWatcher';
 import {
@@ -338,6 +339,7 @@ function SettingsView() {
               <p style={{ marginBottom: '12px' }}>
                 <strong>当前用户:</strong> {activeConnection?.userName}
               </p>
+              {activeConnection && <InviteCard connection={activeConnection} />}
               <p style={{ color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: '16px' }}>
                 gteam (God Team) 是一个去中心化的团队协作工具，采用 Discord 风格的多团队架构。每个团队自托管独立服务器，桌面客户端可同时连接多个团队，帮助团队成员和他们的 AI 助手之间无缝共享上下文信息。
               </p>

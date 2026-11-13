@@ -12,6 +12,8 @@ export const query = async (text: string, params?: any[]) => {
   return res;
 };
 
+export const getClient = () => pool.connect();
+
 export const initDatabase = async () => {
   const client = await pool.connect();
   try {

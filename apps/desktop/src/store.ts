@@ -205,7 +205,7 @@ export const useStore = create<AppState>()(
         
         if (!connection || !teamData || teamData.ws) return;
 
-        const wsUrl = connection.serverUrl.replace(/^http/, 'ws') + ':3001';
+        const wsUrl = connection.serverUrl.replace(/^http/, 'ws').replace(/\/+$/, '') + '/ws';
         const websocket = new WebSocket(wsUrl);
 
         websocket.onopen = () => {
